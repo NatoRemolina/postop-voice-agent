@@ -7,6 +7,10 @@
 
   <div class="call-controls">
     <button id="call-btn" class="call-btn" type="button">📞 Iniciar llamada</button>
+    <label for="voice-select" class="voice-label">Voz / acento:</label>
+    <select id="voice-select" class="voice-select">
+      <option value="">Predeterminada (Ana María)</option>
+    </select>
     <span id="call-status" class="call-status" data-state="disconnected">Desconectado</span>
   </div>
 
@@ -20,7 +24,9 @@
 <style>
   .call-page { max-width: 720px; margin: 0 auto; }
   .mic-note { color: #555; font-size: 0.9rem; }
-  .call-controls { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
+  .call-controls { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+  .voice-label { font-size: 0.9rem; color: #555; }
+  .voice-select { padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid #ccc; }
   .call-btn {
     font-size: 1.25rem; padding: 0.9rem 2rem; border: none; border-radius: 999px;
     cursor: pointer; background: #1a7f4e; color: #fff;

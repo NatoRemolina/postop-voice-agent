@@ -4,6 +4,24 @@ const callBtn = document.getElementById("call-btn");
 const statusEl = document.getElementById("call-status");
 const transcriptEl = document.getElementById("transcript");
 const errorEl = document.getElementById("call-error");
+const voiceSelect = document.getElementById("voice-select");
+
+async function loadVoices() {
+  try {
+    const resp = await fetch("/api/voice/voices");
+    if (!resp.ok) return;
+    const { voices } = await resp.json();
+    for (const v of voices) {
+      const opt = document.createElement("option");
+      opt.value = v.voice_id;
+      opt.textContent = v.name + (v.gender ? ` (${v.gender})` : "");
+      voiceSelect.appendChild(opt);
+    }
+  } catch (_) {
+    /* selector opcional: la llamada funciona con la voz predeterminada */
+  }
+}
+loadVoices();
 
 const STATUS_LABELS = {
   disconnected: "Desconectado",
@@ -84,8 +102,13 @@ async function startCall() {
     }
     const { signed_url: signedUrl } = await resp.json();
 
+    const overrides = voiceSelect.value
+      ? { tts: { voiceId: voiceSelect.value } }
+      : undefined;
+
     conversation = await Conversation.startSession({
       signedUrl,
+      overrides,
       onConnect: () => {
         setStatus("listening");
         setButton(true);
