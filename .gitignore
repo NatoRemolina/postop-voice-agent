@@ -19,6 +19,7 @@ build/
 # Vector store / runtime data
 chroma_data/
 *.sqlite3
+data/*.jsonl
 
 # OS
 .DS_Store

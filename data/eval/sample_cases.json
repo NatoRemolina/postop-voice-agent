@@ -1,0 +1,139 @@
+[
+ {
+  "caso_id": "caso_tray_pac_42_00012_14",
+  "paciente_id": "pac_42_00012",
+  "procedimiento": "Colectomía",
+  "estilo_paciente": "colaborativo",
+  "label_ground_truth": "verde",
+  "patient_turns": [
+   "Pues mire, ahorita lo siento leve, como un 3 de 10. Se me nota más cuando me muevo o me levanto de la cama.",
+   "Sí, me la tomé hace un rato y estaba en 37.5, como tibiecita. No he sentido escalofríos ni nada raro.",
+   "Pues me muevo despacito, con algo de esfuerzo, pero es lo normal para estos días después de la operación. Puedo caminar cortico y cambiar de posición sin problema grave.",
+   "No señor, la he estado revisando y se ve normal, sin enrojecimiento ni hinchazón, tampoco he notado secreción ni olor raro.",
+   "He comido bien, con normalidad, no he notado que se me quite el hambre ni nada así.",
+   "He dormido bien, tranquila, sin despertarme mucho por molestias ni nada así."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00039_7",
+  "paciente_id": "pac_42_00039",
+  "procedimiento": "Mastectomía",
+  "estilo_paciente": "minimizador_sintomas",
+  "label_ground_truth": "verde",
+  "patient_turns": [
+   "Ah, no, tranquilo, casi nada, un dolorcito ahí no más, como un 2. Nada que no se aguante.",
+   "Sí, me la tomé ayer y hoy, y normal, como 36 y algo. Nada raro, todo bien.",
+   "Sí señor, camino normal, sin problema. Ya casi ni me acuerdo que me operaron, jaja.",
+   "No, todo tranquilo, se ve bien. Un poquito rojita ahí no más, pero nada de eso raro, cero problema.",
+   "Sí, comiendo bien, normal, sin problema con eso.",
+   "Duermo bien, tranquilo, sin interrupciones. Todo normal, no se preocupe por mí."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00003_7",
+  "paciente_id": "pac_42_00003",
+  "procedimiento": "Reemplazo de cadera/rodilla",
+  "estilo_paciente": "colaborativo",
+  "label_ground_truth": "amarillo",
+  "patient_turns": [
+   "Buenas, muy amable. Pues hoy lo he sentido como en un 6, algo fuerte, especialmente cuando me muevo un poquito más de la cuenta.",
+   "Sí señor, me la tomé y estaba en 37.6, así como calientica pero sin llegar a escalofríos ni nada de eso.",
+   "Para eso sí me he sentido bien, la movilidad la he notado normal, me levanto y camino sin mayor problema.",
+   "No, la herida la he visto normal, sin enrojecimiento ni hinchazón ni nada saliendo, gracias a Dios.",
+   "Pues el apetito lo he notado un poquito bajo, como que no me provoca comer tanto como antes, pero algo como.",
+   "Ay, el sueño sí lo he tenido bien alterado, me despierto varias veces por el dolor y luego no logro volver a dormir fácil."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00015_3",
+  "paciente_id": "pac_42_00015",
+  "procedimiento": "Apendicectomía",
+  "estilo_paciente": "minimizador_sintomas",
+  "label_ground_truth": "amarillo",
+  "patient_turns": [
+   "Ay, no, tranquila, ha sido nada del otro mundo, un dolorcito ahí en la herida, como un 4 tal vez, pero es soportable.",
+   "Sí, me la tomé y estaba normalita, como en 37, nada de fiebre ni escalofríos, todo bien por ese lado.",
+   "Pues me muevo despacito, obvio, uno recién operado no va a andar corriendo, pero nada grave, ahí voy caminando poquito a poquito.",
+   "Se ve un poquito rojita ahí alrededor, pero nada de hinchazón ni de esas cosas raras que salgan, yo creo que es normal de la cicatrización.",
+   "Como un poquito menos que antes, pero como, no crea, no es que no me provoque nada, solo un poco más despacio con la comida.",
+   "Pues no he dormido muy bien, la verdad, me despierto varias veces, pero eso es normal después de una operación, no le pare muchas bolas a eso."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00030_7",
+  "paciente_id": "pac_42_00030",
+  "procedimiento": "Apendicectomía",
+  "estilo_paciente": "evasivo",
+  "label_ground_truth": "rojo",
+  "patient_turns": [
+   "Ay pues... más o menos, ahí normal, como uno se siente después de esas cosas. ¿Usted qué comió hoy?",
+   "Uy, no sé, no le he puesto mucha atención a eso... he estado como acalorada un poco pero no sé si eso cuenta. ¿Usted cree que eso es normal por el clima de aquí?",
+   "Ah sí, ahí camino normal, sin problema... oiga, ¿y usted hace mucho este trabajo de las llamadas?",
+   "Pues no sé, la he visto como un poquito rosadita ahí en un lado, pero nada grave, creo... ¿eso es lo que preguntaba o quería otra cosa?",
+   "Ay, no sé, como que no me provoca mucho comer últimamente... pero bueno, uno con el estrés a veces no come bien, ¿no? ¿Usted cree que eso influye?",
+   "Pues... no muy bien la verdad, me despierto varias veces, pero no sé, será que estoy nerviosa no más. ¿Ya casi terminamos? Es que me da como pereza hablar de esto."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00017_7",
+  "paciente_id": "pac_42_00017",
+  "procedimiento": "Colectomía",
+  "estilo_paciente": "minimizador_sintomas",
+  "label_ground_truth": "rojo",
+  "patient_turns": [
+   "Ay, no, tranquila doctora, un poquito molesto no más, nada del otro mundo, uno aguanta.",
+   "Sí, me tomé la temperatura ayer, marcó como 37 y algo, nada de escalofríos ni cosas raras, tranquila.",
+   "Pues despacito, como es normal después de esto, pero me muevo, no crea que estoy tan mal.",
+   "Se ve un poquito rojita ahí en el borde, pero nada de esas cosas de pus ni nada raro, yo creo que es normal de la cicatrización, doctora.",
+   "Pues como poquito, se me ha quitado un poco las ganas, pero algo paso, no se preocupe, eso ya va a mejorar.",
+   "Pues no muy bien que digamos, me despierto varias veces, pero uno ya sabe que después de una operación así es normal, no es nada grave."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00017_14",
+  "paciente_id": "pac_42_00017",
+  "procedimiento": "Colectomía",
+  "estilo_paciente": "confundido",
+  "label_ground_truth": "rojo",
+  "patient_turns": [
+   "¿Cómo dice? Ay, disculpe... el dolor... uy no sé bien, como un cinco creo, por la barriga, donde me operaron. Es que se me olvida si fue ayer o hace tres días la operación, perdone.",
+   "Sí, ha habido momentos así como de frío, sudando... me tomaron la temperatura y creo que marcó como 38, algo así, no me acuerdo bien la hora ni el día, discúlpeme.",
+   "Pues me muevo poquito, con ayuda, despacito... es que me canso rápido, no sé si es normal a estos días o no, ya perdí la cuenta de cuántos llevo.",
+   "Ay sí, doctor... eh, mi hija me dijo que vio como un líquido, amarillo creo, saliendo ahí de la herida, no sé bien si eso es normal, me preocupa un poco.",
+   "Ay no, casi no me provoca comer nada, todo me da como asco, mi señora se preocupa porque como poquito.",
+   "No, duermo muy mal, me despierto varias veces, no sé si es por el dolor o los nervios, ya perdí la cuenta de las noches así."
+  ]
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00028_14__capa2",
+  "paciente_id": "pac_42_00028",
+  "procedimiento": "Reemplazo de cadera/rodilla",
+  "estilo_paciente": "ansioso",
+  "label_ground_truth": "rojo",
+  "patient_turns": [
+   "¡Ay, doctor, qué bueno que llama! Mire, el dolor está como en un 5, pero es que hoy amanecí con calentura también, ¿eso es normal? Estoy muy asustada, no sé qué hacer. ... No me acuerdo bien, la verdad.",
+   "Sí señor, me tomé la temperatura y marcó 38.1°C, y sí he sentido como escalofríos también. ¿Eso es grave, doctor? Es que también la herida se ve un poquito rojita y me tiene con los nervios de punta.",
+   "Ay, doctor, eso es lo peor, casi no puedo ni levantarme sola, siento la pierna como que no responde, muy incapacitada me siento. Me da miedo caerme, ¿usted cree que eso es normal o me está pasando algo malo? ome",
+   "Sí doctor, la [inaudible] con un enrojecimiento leve alrededor, no sale nada de líquido gracias a Dios- pero [inaudible] me preocupa [inaudible] ¿será que [inaudible] [inaudible] está infectando? Dígame [inaudible] verd- por [inaudible]",
+   "Ay, casi no me provoca comer nada, doctor, se me ha ido el apetito por completo, como poquito y a las fuerzas. Con tanta preocupación ni hambre me da.",
+   "No, doctor, para nada, duermo muy mal, me despierto varias veces por el dolor y por los nervios, casi no descanso nada. Dígame, ¿todo esto es normal o debo preocuparme más?"
+  ],
+  "capa": "capa2_ruidosa"
+ },
+ {
+  "caso_id": "caso_tray_pac_42_00006_7__capa2",
+  "paciente_id": "pac_42_00006",
+  "procedimiento": "Colecistectomía",
+  "estilo_paciente": "confundido",
+  "label_ground_truth": "amarillo",
+  "patient_turns": [
+   "Uy, disculpe, ¿qué día es hoy? Es que me hago bolas con las fechas... el dolor, mmm, no sé, como un 2 tal vez, ahí manejable, no es mucho.",
+   "Eh... creo que me la tomé ayer, o antes de ayer, no le sé decir bien, y marcó como 37 y algo, no tan alta. No he sentido escalofríos, solo un calorcito raro a veces.",
+   "Sí, camino normal, no batallo pa' moverme... espere, ¿usted me preguntó por lo mismo la semana pasada? Es que ya perdí la cuenta de cuántos días llevo así.",
+   "Ah sí, la miré hace un rato... está como rojita alrededor, un poquito no más, no sé si es normal o qué. No he visto que salga nada raro, solo eso rojito.",
+   "Pues como menos que antes, se me quita el hambre rapidito... no sé si es por los nervios o qué, se me olvida hasta si almorcé. Espere, en realidad no, creo que sí me duele bastante.",
+   "Ay no, duermo muy mal, me despierto varias veces y no sé ni qué hora es cuando abro los ojos... eso sí me tiene como aturdido."
+  ],
+  "capa": "capa2_ruidosa"
+ }
+]
