@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     elevenlabs_api_key: str = ""
+    elevenlabs_agent_id: str = ""
 
     gemini_model: str = "gemini-3.6-flash"
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
