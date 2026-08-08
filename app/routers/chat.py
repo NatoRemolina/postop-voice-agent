@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from app.agent.llm import TurnUsage, stream_gemini
+from app.agent.llm import TurnUsage, stream_response
 from app.agent.prompts import DEFAULT_PATIENT_CONTEXT, SYSTEM_PROMPT, format_rag_context
 from app.agent.scenario import detect_scenario
 from app.config import settings
@@ -89,7 +89,7 @@ async def chat_completions(request: Request):
 
         yield _sse(_chunk_payload(chat_id, created, "", None))
         try:
-            async for text in stream_gemini(system_prompt, history, usage):
+            async for text in stream_response(system_prompt, history, usage):
                 if t_first_token is None:
                     t_first_token = time.perf_counter()
                 if control_buf is not None:
@@ -167,7 +167,8 @@ async def chat_completions(request: Request):
                 "output_tokens": usage.output_tokens,
                 "model_calls": usage.model_calls,
                 "rag_queries": 1,
-                "model": settings.gemini_model,
+                "model": usage.model_used or settings.gemini_model,
+                "fallback_used": usage.fallback_used,
             },
         )
 
