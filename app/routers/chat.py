@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from app.agent.llm import TurnUsage, stream_gemini
 from app.agent.prompts import DEFAULT_PATIENT_CONTEXT, SYSTEM_PROMPT, format_rag_context
+from app.agent.scenario import detect_scenario
 from app.config import settings
 from app.rag.retrieve import retrieve
 from app.storage import append_jsonl
@@ -69,7 +70,8 @@ async def chat_completions(request: Request):
         history = [{"role": "user", "content": "Hola"}]
 
     rag_query = _build_rag_query(history)
-    chunks = retrieve(rag_query)
+    scenario = extra.get("scenario") or detect_scenario([m["content"] for m in history])
+    chunks = retrieve(rag_query, scenario=scenario)
     system_prompt = SYSTEM_PROMPT.format(
         patient_context=patient_context,
         rag_context=format_rag_context(chunks),
@@ -149,6 +151,7 @@ async def chat_completions(request: Request):
                     (m["content"] for m in reversed(history) if m["role"] == "user"), ""
                 ),
                 "rag_query": rag_query,
+                "rag_scenario": scenario,
                 "rag_sources": [
                     {"source": c.source, "scenario": c.scenario, "page": c.page,
                      "score": round(c.score, 4)}
