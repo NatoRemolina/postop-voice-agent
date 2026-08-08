@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Consola — Agente Postoperatorio — Tech Sphere 2026{% endblock %}
+{% block content %}
+<div id="alerts-banner" class="alerts-banner hidden">
+  <strong>⚠ Alertas activas</strong>
+  <ul id="alerts-list"></ul>
+</div>
+
+<section>
+  <h1>Consola de administración</h1>
+</section>
+
+<section class="card">
+  <h2>Base de conocimiento</h2>
+  <div class="table-wrap">
+    <table id="docs-table">
+      <thead>
+        <tr>
+          <th>Documento</th>
+          <th>Escenario</th>
+          <th>Chunks</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="docs-body">
+        <tr><td colspan="5" class="muted">Cargando…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <form id="upload-form" class="upload-form">
+    <label>
+      Archivo PDF
+      <input type="file" id="upload-file" accept=".pdf" required>
+    </label>
+    <label>
+      Escenario
+      <input type="text" id="upload-scenario" value="subido_en_vivo">
+    </label>
+    <button type="submit" id="upload-btn">Subir y procesar</button>
+    <span id="upload-status"></span>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Llamadas recientes</h2>
+  <div id="calls-list" class="calls-list">
+    <p class="muted">Cargando…</p>
+  </div>
+</section>
+
+<dialog id="call-dialog">
+  <div class="dialog-header">
+    <h3 id="dialog-title">Detalle de llamada</h3>
+    <button type="button" id="dialog-close">Cerrar</button>
+  </div>
+  <div id="dialog-body"></div>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script src="/static/admin.js"></script>
+{% endblock %}
