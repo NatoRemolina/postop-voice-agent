@@ -211,6 +211,8 @@ async def _generate_with_gemini(
             system_instruction=SUMMARY_SYSTEM_PROMPT,
             temperature=0.2,
             max_output_tokens=700,
+            response_mime_type="application/json",
+            thinking_config=types.ThinkingConfig(thinking_level="minimal"),
         ),
     )
     data = _parse_json_block(response.text or "")

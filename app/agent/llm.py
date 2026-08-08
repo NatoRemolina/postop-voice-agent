@@ -47,7 +47,11 @@ async def stream_gemini(
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.4,
-            max_output_tokens=400,
+            max_output_tokens=512,
+            # Voz en tiempo real: el razonamiento extendido dispara la latencia
+            # del primer token y consume el presupuesto de salida. Los modelos
+            # Gemini 3.x no permiten apagarlo del todo; "minimal" es el mínimo.
+            thinking_config=types.ThinkingConfig(thinking_level="minimal"),
         ),
     )
     async for chunk in stream:
