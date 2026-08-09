@@ -1,0 +1,5 @@
+# Dependencias de analisis y ETL (solo desarrollo; el runtime del jurado no las necesita).
+# Se ejecutan con el python3 del sistema, no con el .venv del proyecto.
+pandas==3.0.3
+openpyxl==3.1.5
+matplotlib==3.10.9
