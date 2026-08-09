@@ -27,3 +27,20 @@ def read_jsonl(name: str) -> list[dict]:
         return []
     with open(path, encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
+
+
+def delete_matching(name: str, conversation_id: str) -> int:
+    """Derecho de supresión (docs/gobernanza-datos.md): reescribe el archivo
+    sin los registros de esa conversación. Devuelve cuántos se eliminaron."""
+    path = _path(name)
+    if not path.exists():
+        return 0
+    with _lock:
+        records = read_jsonl(name)
+        kept = [r for r in records if r.get("conversation_id") != conversation_id]
+        removed = len(records) - len(kept)
+        if removed:
+            with open(path, "w", encoding="utf-8") as f:
+                for r in kept:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        return removed

@@ -3,6 +3,7 @@ import sqlite3
 from fastapi import APIRouter, HTTPException
 
 from app.config import BASE_DIR
+from app.privacy import first_name
 
 WAREHOUSE_PATH = BASE_DIR / "data" / "warehouse.db"
 
@@ -32,11 +33,12 @@ async def list_patients():
         ).fetchall()
     finally:
         conn.close()
-    # Minimización de datos: solo el nombre de pila, nunca el nombre completo.
+    # Minimización de datos (docs/gobernanza-datos.md): solo el nombre de
+    # pila, nunca el nombre completo, en este listado general de demo.
     return [
         {
             "paciente_id": row["paciente_id"],
-            "nombre": row["nombre_completo"].split()[0] if row["nombre_completo"] else "",
+            "nombre": first_name(row["nombre_completo"]),
             "ciudad": row["ciudad"],
             "procedimiento": row["procedimiento"],
             "dia_postop": row["dia_postop"],

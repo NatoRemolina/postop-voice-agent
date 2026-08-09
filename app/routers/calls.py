@@ -9,7 +9,7 @@ from app.agent.summary import (
     persist_summary,
     turns_for_conversation,
 )
-from app.storage import append_jsonl, read_jsonl
+from app.storage import append_jsonl, delete_matching, read_jsonl
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -43,6 +43,23 @@ async def get_call(conversation_id: str):
     if summary is None:
         summary = await build_call_summary(conversation_id, turns=turns)
     return {"summary": summary, "turns": turns}
+
+
+@router.delete("/calls/{conversation_id}")
+async def delete_call(conversation_id: str):
+    """Derecho de supresión (Ley 1581 de 2012 / docs/gobernanza-datos.md):
+    borra todo rastro de una conversación — turnos, resumen y alertas."""
+    counts = {}
+    for filename in ("turns.jsonl", "call_summaries.jsonl", "alerts.jsonl"):
+        counts[filename] = await run_in_threadpool(
+            delete_matching, filename, conversation_id
+        )
+    total = sum(counts.values())
+    if total == 0:
+        raise HTTPException(
+            status_code=404, detail="No hay datos registrados para esa conversación"
+        )
+    return {"status": "eliminado", "conversation_id": conversation_id, "registros_borrados": counts}
 
 
 @router.post("/calls/{conversation_id}/summarize")
