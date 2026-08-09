@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Respaldo automático si Gemini agota su cuota gratuita diaria — también
     # de una familia permitida por el reto (Meta Llama vía Groq).
     groq_model: str = "llama-3.3-70b-versatile"
+    # Tercer nivel de respaldo: cuota diaria de tokens independiente de la del
+    # 70B, así una llamada nunca se queda sin modelo que responda.
+    groq_fallback_model: str = "llama-3.1-8b-instant"
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
     chroma_dir: Path = BASE_DIR / "chroma_data"

@@ -58,6 +58,17 @@ def _build_groq_model():
     )
 
 
+def _build_groq_fallback_model():
+    return ChatGroq(
+        model=settings.groq_fallback_model,
+        temperature=0.4,
+        max_tokens=512,
+        api_key=settings.groq_api_key,
+        max_retries=0,
+        timeout=8,
+    )
+
+
 def _history_to_messages(history: list[dict]) -> list:
     messages: list = []
     for m in history:
@@ -190,49 +201,59 @@ async def stream_agentic_response(
     system_prompt = AGENTIC_SYSTEM_PROMPT.format(patient_context=patient_context)
     lc_messages = _history_to_messages(history) or [HumanMessage(content="Hola")]
 
+    from app.graph.tools import make_tools
+
+    # Cascada de proveedores: cada uno tiene su propia cuota gratuita diaria e
+    # independiente, así que agotar una no deja la llamada sin voz. El orden es
+    # por calidad de razonamiento clínico descendente.
+    cascada = [
+        (_build_gemini_model, settings.gemini_model),
+        (_build_groq_model, settings.groq_model),
+        (_build_groq_fallback_model, settings.groq_fallback_model),
+    ]
+
     turn_state: dict = {}
     content_yielded = False
-    try:
-        from app.graph.tools import make_tools
+    for idx, (build_model, model_name) in enumerate(cascada):
+        es_ultimo = idx == len(cascada) - 1
+        # Turno limpio en cada intento: ninguna tool tiene efectos externos
+        # (todo vive en turn_state), así que reintentar el turno completo con
+        # otro proveedor es seguro aunque el anterior ya hubiera llamado tools.
+        turn_state.clear()
+        telemetry["herramientas_invocadas"] = []
+        usage.model_calls = 0
+        usage.input_tokens = 0
+        usage.output_tokens = 0
+        usage.fallback_used = idx > 0
 
-        tools = make_tools(scenario, turn_state)
-        async for chunk in _run_turn(
-            _build_gemini_model(), tools, system_prompt, lc_messages,
-            usage, telemetry, settings.gemini_model,
-        ):
-            content_yielded = True
-            yield chunk
-    except Exception as exc:
-        if content_yielded:
-            logger.exception(
-                "Gemini falló a mitad de turno agéntico (ya se había hablado "
-                "algo al paciente); no se reintenta, se corta con gracia."
-            )
-        else:
-            logger.warning(
-                "Gemini falló antes de decir nada este turno (%s); "
-                "reintentando el turno completo con Groq.", exc,
-            )
-            turn_state.clear()
-            telemetry["herramientas_invocadas"] = []
-            usage.model_calls = 0
-            usage.input_tokens = 0
-            usage.output_tokens = 0
-            usage.fallback_used = True
-            # SIN try/except acá a propósito: si Groq también falla, la
-            # excepción debe propagarse hacia app/routers/chat.py, que ya
-            # tiene el mensaje de disculpa hablado probado en producción
-            # (idéntico al que usa app.agent.llm.stream_response cuando
-            # ambos proveedores caen). Absorberla acá dejaría al paciente en
-            # silencio total — exactamente el riesgo que encontró la
-            # verificación en la versión anterior con with_fallbacks().
+        try:
             tools = make_tools(scenario, turn_state)
             async for chunk in _run_turn(
-                _build_groq_model(), tools, system_prompt, lc_messages,
-                usage, telemetry, settings.groq_model,
+                build_model(), tools, system_prompt, lc_messages,
+                usage, telemetry, model_name,
             ):
                 content_yielded = True
                 yield chunk
+            break
+        except Exception as exc:
+            if content_yielded:
+                # Ya se le habló algo al paciente: no se puede "retractar" y
+                # repetir el turno con otro modelo. Se corta con gracia.
+                logger.exception(
+                    "%s falló a mitad de turno agéntico; se corta sin reintentar.",
+                    model_name,
+                )
+                break
+            if es_ultimo:
+                # Se agotó la cascada sin decir nada: la excepción debe
+                # propagarse a app/routers/chat.py, que tiene el mensaje de
+                # disculpa hablado. Absorberla acá dejaría silencio total.
+                logger.error("Todos los proveedores fallaron este turno agéntico.")
+                raise
+            logger.warning(
+                "%s no disponible (%s); reintentando el turno completo con %s.",
+                model_name, exc, cascada[idx + 1][1],
+            )
 
     if usage.model_calls == 0:
         usage.model_calls = 1
