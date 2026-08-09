@@ -100,11 +100,20 @@ def _control_payload(turn_state: dict) -> dict:
     criticidad = (
         turn_state.get("criticidad_final") or turn_state.get("criticidad_llm") or "verde"
     )
-    # Red de seguridad: si por cualquier motivo (ej. presupuesto de tool calls
-    # agotado a mitad del turno en app.graph.tools) `escalar_a_equipo_clinico`
-    # no llegó a marcar turn_state["escalar"], una criticidad "rojo" igual
-    # fuerza el escalamiento — nunca se sub-reporta silenciosamente un caso rojo.
-    escalar = bool(turn_state.get("escalar", False)) or criticidad == "rojo"
+    escalar_crudo = bool(turn_state.get("escalar", False))
+    # Red de seguridad (doble vía):
+    # 1. criticidad "rojo" siempre fuerza escalar=true, pase lo que pase con
+    #    el estado crudo de la tool — nunca se sub-reporta un caso rojo.
+    # 2. escalar=true (via escalar_a_equipo_clinico) sube la criticidad a
+    #    "rojo" si registrar_evaluacion no alcanzó a correr en el mismo turno
+    #    (ej. presupuesto de tool calls agotado) — visto en producción: el
+    #    modelo escalaba con red_flags reales pero criticidad quedaba en
+    #    "verde" por defecto, una inconsistencia que un jurado detectaría de
+    #    inmediato. escalar_a_equipo_clinico solo se llama ante alarma real
+    #    (ver su docstring), así que nunca es razonable que coexista con verde.
+    if escalar_crudo and criticidad == "verde":
+        criticidad = "rojo"
+    escalar = escalar_crudo or criticidad == "rojo"
     return {
         "criticidad": criticidad,
         "confianza": _infer_confianza(turn_state),
