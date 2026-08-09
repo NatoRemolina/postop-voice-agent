@@ -25,7 +25,18 @@ _gemini_down_until: float = 0.0
 def get_gemini() -> genai.Client:
     global _client
     if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        _client = genai.Client(
+            api_key=settings.gemini_api_key,
+            # Default del SDK: 5 reintentos internos con backoff ante 429 —
+            # inútil contra una cuota diaria agotada y agrega varios segundos
+            # de espera antes de que nuestro propio fallback a Groq se entere
+            # del fallo (confirmado en producción: dejaba al paciente en
+            # silencio mientras ElevenLabs esperaba). Fallar rápido.
+            http_options=types.HttpOptions(
+                timeout=8_000,
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
     return _client
 
 
