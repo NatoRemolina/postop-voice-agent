@@ -14,6 +14,9 @@ from app.config import settings
 from app.rag.retrieve import retrieve
 from app.storage import append_jsonl
 
+if settings.agentic_rag_enabled:
+    from app.graph.agent import stream_agentic_response
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -69,17 +72,23 @@ async def chat_completions(request: Request):
     if not history:
         history = [{"role": "user", "content": "Hola"}]
 
-    rag_query = _build_rag_query(history)
     scenario = extra.get("scenario") or detect_scenario([m["content"] for m in history])
-    chunks = retrieve(rag_query, scenario=scenario)
-    system_prompt = SYSTEM_PROMPT.format(
-        patient_context=patient_context,
-        rag_context=format_rag_context(chunks),
-    )
+
+    rag_query = None
+    chunks = []
+    system_prompt = None
+    if not settings.agentic_rag_enabled:
+        rag_query = _build_rag_query(history)
+        chunks = retrieve(rag_query, scenario=scenario)
+        system_prompt = SYSTEM_PROMPT.format(
+            patient_context=patient_context,
+            rag_context=format_rag_context(chunks),
+        )
 
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:16]}"
     created = int(time.time())
     usage = TurnUsage()
+    telemetry: dict = {}
 
     async def event_stream():
         t_first_token = None
@@ -88,8 +97,12 @@ async def chat_completions(request: Request):
         control_buf: str | None = None
 
         yield _sse(_chunk_payload(chat_id, created, "", None))
+        if settings.agentic_rag_enabled:
+            stream = stream_agentic_response(history, patient_context, scenario, usage, telemetry)
+        else:
+            stream = stream_response(system_prompt, history, usage)
         try:
-            async for text in stream_response(system_prompt, history, usage):
+            async for text in stream:
                 if t_first_token is None:
                     t_first_token = time.perf_counter()
                 if control_buf is not None:
@@ -142,6 +155,24 @@ async def chat_completions(request: Request):
                     logger.warning("unparseable control block: %s", m.group(1)[:200])
 
         t_end = time.perf_counter()
+        if settings.agentic_rag_enabled:
+            rag_sources = telemetry.get("rag_sources", [])
+            record_extra = {
+                "orquestacion": "agentic_langgraph",
+                "herramientas_invocadas": telemetry.get("herramientas_invocadas", []),
+                "grounded": telemetry.get("grounded", False),
+                "criticidad_llm": telemetry.get("criticidad_llm"),
+                "criticidad_ml": telemetry.get("criticidad_ml"),
+                "escalar_efectivo": telemetry.get("escalar_efectivo"),
+            }
+        else:
+            rag_sources = [
+                {"source": c.source, "scenario": c.scenario, "page": c.page,
+                 "score": round(c.score, 4)}
+                for c in chunks
+            ]
+            record_extra = {"orquestacion": "pipeline_fijo"}
+
         append_jsonl(
             "turns.jsonl",
             {
@@ -152,11 +183,7 @@ async def chat_completions(request: Request):
                 ),
                 "rag_query": rag_query,
                 "rag_scenario": scenario,
-                "rag_sources": [
-                    {"source": c.source, "scenario": c.scenario, "page": c.page,
-                     "score": round(c.score, 4)}
-                    for c in chunks
-                ],
+                "rag_sources": rag_sources,
                 "spoken_text": "".join(spoken_parts).strip(),
                 "control": control,
                 "latency_first_token_ms": round(
@@ -169,6 +196,7 @@ async def chat_completions(request: Request):
                 "rag_queries": 1,
                 "model": usage.model_used or settings.gemini_model,
                 "fallback_used": usage.fallback_used,
+                **record_extra,
             },
         )
 
