@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import calls, chat, documents, metrics, voice, web
+from app.routers import calls, chat, documents, metrics, patients, voice, web
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,6 +26,7 @@ app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(calls.router)
 app.include_router(metrics.router)
+app.include_router(patients.router)
 app.include_router(voice.router)
 app.include_router(web.router)
 
