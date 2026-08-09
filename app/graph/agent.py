@@ -35,6 +35,15 @@ def _build_gemini_model():
         # primer token. "minimal" es el mínimo que exponen los modelos 3.x.
         thinking_level="minimal",
         google_api_key=settings.gemini_api_key,
+        # El default de LangChain es 6 reintentos internos con backoff ante un
+        # 429 — verificado en producción: eso agrega varios segundos de espera
+        # ANTES de que nuestro propio reintento a Groq (arriba) siquiera se
+        # entere del fallo, y ElevenLabs se cansa de esperar y corta el turno
+        # (silencio total al paciente). En una cuota diaria agotada, reintentar
+        # no ayuda — mejor fallar rápido y dejar que el reintento manual de
+        # turno completo hacia Groq tome el control de inmediato.
+        max_retries=0,
+        timeout=8,
     )
 
 
@@ -44,6 +53,8 @@ def _build_groq_model():
         temperature=0.4,
         max_tokens=512,
         api_key=settings.groq_api_key,
+        max_retries=0,
+        timeout=8,
     )
 
 
