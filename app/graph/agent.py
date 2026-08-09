@@ -19,6 +19,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
+from app.agent import circuit_breaker
 from app.agent.llm import TurnUsage
 from app.config import settings
 from app.graph.agent_prompt import AGENTIC_SYSTEM_PROMPT
@@ -214,17 +215,24 @@ async def stream_agentic_response(
 
     # Cascada de proveedores: cada uno tiene su propia cuota gratuita diaria e
     # independiente, así que agotar una no deja la llamada sin voz. El orden es
-    # por calidad de razonamiento clínico descendente.
+    # por calidad de razonamiento clínico descendente. La clave del breaker
+    # distingue groq-70b de groq-8b: son cupos separados en la misma cuenta
+    # (uno diario, otro por minuto), así que agotar uno no debe bloquear el otro.
     cascada = [
-        (_build_gemini_model, settings.gemini_model),
-        (_build_groq_model, settings.groq_model),
-        (_build_groq_fallback_model, settings.groq_fallback_model),
+        ("gemini", _build_gemini_model, settings.gemini_model),
+        ("groq-70b", _build_groq_model, settings.groq_model),
+        ("groq-8b", _build_groq_fallback_model, settings.groq_fallback_model),
     ]
 
     turn_state: dict = {}
     content_yielded = False
-    for idx, (build_model, model_name) in enumerate(cascada):
+    for idx, (breaker_key, build_model, model_name) in enumerate(cascada):
         es_ultimo = idx == len(cascada) - 1
+        if circuit_breaker.is_down(breaker_key):
+            logger.info("%s en cooldown, se salta sin intentar.", model_name)
+            if es_ultimo:
+                raise RuntimeError(f"Todos los proveedores en cooldown (último: {model_name})")
+            continue
         # Turno limpio en cada intento: ninguna tool tiene efectos externos
         # (todo vive en turn_state), así que reintentar el turno completo con
         # otro proveedor es seguro aunque el anterior ya hubiera llamado tools.
@@ -245,6 +253,7 @@ async def stream_agentic_response(
                 yield chunk
             break
         except Exception as exc:
+            cooldown = circuit_breaker.mark_down(breaker_key, exc)
             if content_yielded:
                 # Ya se le habló algo al paciente: no se puede "retractar" y
                 # repetir el turno con otro modelo. Se corta con gracia.
@@ -260,8 +269,8 @@ async def stream_agentic_response(
                 logger.error("Todos los proveedores fallaron este turno agéntico.")
                 raise
             logger.warning(
-                "%s no disponible (%s); reintentando el turno completo con %s.",
-                model_name, exc, cascada[idx + 1][1],
+                "%s no disponible (%s, cooldown %ss); reintentando el turno completo con %s.",
+                model_name, exc, cooldown, cascada[idx + 1][2],
             )
 
     if usage.model_calls == 0:

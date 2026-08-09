@@ -1,6 +1,5 @@
 import json
 import logging
-import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
@@ -8,6 +7,7 @@ import httpx
 from google import genai
 from google.genai import types
 
+from app.agent import circuit_breaker
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 _client: genai.Client | None = None
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
-
-# Circuit breaker: si Gemini falla (típicamente cuota diaria agotada), se salta
-# durante este lapso para no pagar ~2s de intento fallido en cada turno de voz.
-GEMINI_COOLDOWN_SECONDS = 600
-_gemini_down_until: float = 0.0
 
 
 def get_gemini() -> genai.Client:
@@ -111,7 +106,12 @@ async def stream_groq(
         async with client.stream("POST", GROQ_CHAT_URL, json=body, headers=headers) as resp:
             if resp.status_code != 200:
                 error_body = await resp.aread()
-                raise RuntimeError(f"Groq {resp.status_code}: {error_body.decode(errors='replace')[:300]}")
+                error = RuntimeError(
+                    f"Groq {resp.status_code}: {error_body.decode(errors='replace')[:300]}"
+                )
+                if resp.status_code == 429:
+                    circuit_breaker.mark_down("groq", error)
+                raise error
             async for line in resp.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -138,9 +138,7 @@ async def stream_response(
     modelo caído), reintenta automáticamente con Groq — ambas son familias
     de modelo permitidas por el reto, así que el respaldo no compromete G3.
     """
-    global _gemini_down_until
-
-    if time.monotonic() < _gemini_down_until:
+    if circuit_breaker.is_down("gemini"):
         usage.model_used = settings.groq_model
         usage.fallback_used = True
         async for text in stream_groq(system_prompt, history, usage):
@@ -154,11 +152,11 @@ async def stream_response(
     except StopAsyncIteration:
         return
     except Exception as exc:
-        _gemini_down_until = time.monotonic() + GEMINI_COOLDOWN_SECONDS
+        cooldown = circuit_breaker.mark_down("gemini", exc)
         logger.warning(
             "Gemini no disponible (%s); Groq de respaldo y cooldown de %ss",
             exc,
-            GEMINI_COOLDOWN_SECONDS,
+            cooldown,
         )
         usage.model_used = settings.groq_model
         usage.fallback_used = True
