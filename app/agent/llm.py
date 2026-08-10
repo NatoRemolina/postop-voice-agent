@@ -28,7 +28,9 @@ def get_gemini() -> genai.Client:
             # del fallo (confirmado en producción: dejaba al paciente en
             # silencio mientras ElevenLabs esperaba). Fallar rápido.
             http_options=types.HttpOptions(
-                timeout=8_000,
+                # Mínimo real del SDK es 10s (confirmado en producción: 8s
+                # fallaba de inmediato con "Manually set deadline too short").
+                timeout=15_000,
                 retry_options=types.HttpRetryOptions(attempts=1),
             ),
         )

@@ -44,7 +44,10 @@ def _build_gemini_model():
         # no ayuda — mejor fallar rápido y dejar que el reintento manual de
         # turno completo hacia Groq tome el control de inmediato.
         max_retries=0,
-        timeout=8,
+        # El cliente de Gemini exige un mínimo de 10s ("Manually set deadline
+        # 8s is too short") — con 8s fallaba SIEMPRE de inmediato, ni siquiera
+        # llegaba a intentar la solicitud real. Verificado en producción.
+        timeout=15,
     )
 
 
@@ -55,7 +58,7 @@ def _build_groq_model():
         max_tokens=512,
         api_key=settings.groq_api_key,
         max_retries=0,
-        timeout=8,
+        timeout=15,
     )
 
 
@@ -66,7 +69,7 @@ def _build_groq_fallback_model():
         max_tokens=512,
         api_key=settings.groq_api_key,
         max_retries=0,
-        timeout=8,
+        timeout=15,
     )
 
 
