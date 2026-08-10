@@ -153,6 +153,39 @@ def _content_to_text(content) -> str:
     return ""
 
 
+def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, list[dict]]:
+    """Recupera contexto clínico para el último turno del paciente, antes de
+    invocar al modelo. Devuelve (texto formateado con citas, fuentes)."""
+    last_user = next(
+        (m["content"] for m in reversed(history) if m.get("role") == "user"), ""
+    )
+    if not last_user.strip():
+        return "(sin consulta clínica en este turno)", []
+    try:
+        from app.graph.retrieval import search
+
+        chunks = search(last_user, scenario, top_k=3)
+    except Exception:
+        logger.warning("prefetch de contexto clínico falló", exc_info=True)
+        return "(no disponible en este turno)", []
+    if not chunks:
+        return "(sin resultados relevantes en el corpus para este turno)", []
+    lines = [
+        f"[{c.get('source', 'desconocido')}, pág {c.get('page', 0)}] {c.get('text', '')}"
+        for c in chunks
+    ]
+    sources = [
+        {
+            "source": c.get("source"),
+            "scenario": c.get("scenario"),
+            "page": c.get("page"),
+            "score": c.get("score"),
+        }
+        for c in chunks
+    ]
+    return "\n".join(lines), sources
+
+
 async def _run_turn(
     model,
     tools: list,
@@ -232,7 +265,17 @@ async def stream_agentic_response(
     usage.model_used = ""
     usage.fallback_used = False
 
-    system_prompt = AGENTIC_SYSTEM_PROMPT.format(patient_context=patient_context)
+    # Pre-inyección del contexto clínico: sin esto el modelo gastaba una ronda
+    # completa de tool-calling (buscar → resultado → recién ahí hablar) antes de
+    # decir una sola palabra, con 4-6s de silencio medidos en producción — y
+    # ElevenLabs terminaba cortando la llamada. El retrieval corre acá una sola
+    # vez, en paralelo conceptual al turno, y el modelo ya recibe los pasajes
+    # con sus citas; la tool sigue disponible para cuando necesite algo más.
+    rag_context, rag_sources = _prefetch_context(history, scenario)
+    telemetry["rag_prefetch_sources"] = rag_sources
+    system_prompt = AGENTIC_SYSTEM_PROMPT.format(
+        patient_context=patient_context, rag_context=rag_context
+    )
     lc_messages = _history_to_messages(history) or [HumanMessage(content="Hola")]
 
     from app.graph.tools import make_tools
@@ -302,10 +345,12 @@ async def stream_agentic_response(
     if not usage.model_used:
         usage.model_used = settings.groq_model if usage.fallback_used else settings.gemini_model
 
-    telemetry["grounded"] = bool(turn_state.get("grounded", False))
+    # El contexto pre-inyectado también fundamenta la respuesta, así que cuenta
+    # como "grounded" y sus fuentes son igual de citables que las de la tool.
+    telemetry["grounded"] = bool(turn_state.get("grounded", False)) or bool(rag_sources)
     telemetry["criticidad_llm"] = turn_state.get("criticidad_llm")
     telemetry["criticidad_ml"] = turn_state.get("criticidad_ml")
-    telemetry["rag_sources"] = turn_state.get("rag_sources", [])
+    telemetry["rag_sources"] = (turn_state.get("rag_sources") or []) + rag_sources
     # "escalar" es el valor crudo que reportó la tool; "escalar_efectivo" es el
     # que realmente viaja en el <control> ya con la red de seguridad aplicada
     # (ver _control_block) — se guardan ambos para poder auditar discrepancias.
