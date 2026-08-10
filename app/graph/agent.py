@@ -165,7 +165,7 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
     try:
         from app.graph.retrieval import search
 
-        chunks = search(last_user, scenario, top_k=3)
+        chunks = search(last_user, scenario, top_k=3, fast=True)
     except Exception:
         logger.warning("prefetch de contexto clínico falló", exc_info=True)
         return "(no disponible en este turno)", []

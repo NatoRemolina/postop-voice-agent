@@ -253,9 +253,20 @@ def _to_result(doc: Document, rank: int, total: int) -> dict:
     }
 
 
-def search_diagnostics(query: str, scenario: str | None = None, top_k: int = 6) -> dict:
+def search_diagnostics(
+    query: str, scenario: str | None = None, top_k: int = 6, fast: bool = False
+) -> dict:
     """Ejecuta el pipeline completo y devuelve todo el detalle intermedio
-    (para telemetría) además de los resultados finales en "resultados"."""
+    (para telemetría) además de los resultados finales en "resultados".
+
+    fast=True omite los dos pasos que usan un LLM auxiliar (reescritura de la
+    consulta y calificación de relevancia) y va directo a la búsqueda híbrida:
+    ~200-400ms en vez de 2-3s. Es el modo del PREFETCH del turno de voz, donde
+    esos 2-3s ocurren ANTES de la primera palabra del agente (medido en
+    producción: eran la mayor parte de los 4-6s de silencio que hacían caer
+    llamadas). El modo completo queda para la tool explícita del modelo y el
+    agente post-llamada, donde la latencia no bloquea la voz.
+    """
     t_start = time.perf_counter()
     diag: dict = {
         "query_original": query,
@@ -279,16 +290,19 @@ def search_diagnostics(query: str, scenario: str | None = None, top_k: int = 6) 
         diag["total_ms"] = round((time.perf_counter() - t_start) * 1000, 1)
         return diag
 
-    try:
-        t0 = time.perf_counter()
-        reescritura, ok = _rewrite_query(query)
-        diag["reescritura_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-        diag["reescritura_ok"] = ok
-        diag["consulta_reescrita"] = reescritura.consulta_principal
-        diag["sub_consultas"] = list(reescritura.sub_consultas)
-    except Exception:
-        logger.error("unexpected failure around query rewrite", exc_info=True)
+    if fast:
         reescritura = Reescritura(consulta_principal=query, sub_consultas=[])
+    else:
+        try:
+            t0 = time.perf_counter()
+            reescritura, ok = _rewrite_query(query)
+            diag["reescritura_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            diag["reescritura_ok"] = ok
+            diag["consulta_reescrita"] = reescritura.consulta_principal
+            diag["sub_consultas"] = list(reescritura.sub_consultas)
+        except Exception:
+            logger.error("unexpected failure around query rewrite", exc_info=True)
+            reescritura = Reescritura(consulta_principal=query, sub_consultas=[])
 
     seen_q: set[str] = set()
     queries: list[str] = []
@@ -317,12 +331,16 @@ def search_diagnostics(query: str, scenario: str | None = None, top_k: int = 6) 
     candidates = _dedup_docs(candidates)
     diag["n_candidatos"] = len(candidates)
 
-    to_qualify = candidates[:_MAX_QUALIFY_BATCH]
-    diag["n_calificados"] = len(to_qualify)
-    t0 = time.perf_counter()
-    filtered = _filter_relevant(query, to_qualify) if to_qualify else []
-    diag["calificacion_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-    diag["n_relevantes"] = len(filtered)
+    if fast:
+        filtered = candidates
+        diag["n_relevantes"] = len(filtered)
+    else:
+        to_qualify = candidates[:_MAX_QUALIFY_BATCH]
+        diag["n_calificados"] = len(to_qualify)
+        t0 = time.perf_counter()
+        filtered = _filter_relevant(query, to_qualify) if to_qualify else []
+        diag["calificacion_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        diag["n_relevantes"] = len(filtered)
 
     if not filtered:
         diag["reintento"] = True
@@ -354,14 +372,16 @@ def search_diagnostics(query: str, scenario: str | None = None, top_k: int = 6) 
     return diag
 
 
-def search(query: str, scenario: str | None = None, top_k: int = 6) -> list[dict]:
+def search(
+    query: str, scenario: str | None = None, top_k: int = 6, fast: bool = False
+) -> list[dict]:
     """Búsqueda híbrida con reescritura y calificación de relevancia.
 
     Nunca levanta excepción: cualquier fallo interno degrada a lo mejor
     disponible, y un fallo catastrófico devuelve lista vacía.
     """
     try:
-        return search_diagnostics(query, scenario, top_k)["resultados"]
+        return search_diagnostics(query, scenario, top_k, fast=fast)["resultados"]
     except Exception:
         logger.error("search() failed unexpectedly, returning empty results", exc_info=True)
         return []
