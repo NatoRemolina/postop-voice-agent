@@ -13,6 +13,7 @@ sintetiza acá a partir del `turn_state` que esas tools van llenando, para que
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -186,6 +187,10 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
     return "\n".join(lines), sources
 
 
+_CONTROL_RE = re.compile(r"<control>(.*?)</control>", re.DOTALL)
+_CONTROL_OPEN = "<control>"
+
+
 async def _run_turn(
     model,
     tools: list,
@@ -194,13 +199,23 @@ async def _run_turn(
     usage: TurnUsage,
     telemetry: dict,
     model_name: str,
+    turn_state: dict,
 ) -> AsyncIterator[str]:
     """Una corrida completa del grafo con UN modelo fijo. Puede lanzar
     excepción a mitad de camino (se propaga tal cual al llamador, que decide
-    si reintentar entero con otro proveedor o rendirse)."""
+    si reintentar entero con otro proveedor o rendirse).
+
+    El modelo emite su evaluación como bloque `<control>` al final del texto
+    (una sola invocación por turno = primera palabra en ~1s, verificado en el
+    pipeline fijo). Ese bloque se retiene aquí (nunca se yieldea crudo) y se
+    parsea hacia `turn_state`; el llamador sintetiza el `<control>` definitivo
+    con las redes de seguridad y el ensemble de ML."""
     from langchain.agents import create_agent
 
     agent_graph = create_agent(model=model, tools=tools, system_prompt=system_prompt)
+
+    held = ""
+    control_buf: str | None = None
 
     async for chunk in agent_graph.astream({"messages": lc_messages}, stream_mode="messages"):
         if not isinstance(chunk, tuple) or len(chunk) != 2:
@@ -225,9 +240,50 @@ async def _run_turn(
             continue
 
         content = _content_to_text(getattr(msg, "content", None))
-        if content:
-            usage.model_used = model_name
-            yield content
+        if not content:
+            continue
+        usage.model_used = model_name
+
+        if control_buf is not None:
+            control_buf += content
+            continue
+        held += content
+        idx = held.find(_CONTROL_OPEN)
+        if idx != -1:
+            emit, control_buf, held = held[:idx], held[idx:], ""
+            if emit:
+                yield emit
+            continue
+        # retener una cola que podría ser el inicio de un "<control>" partido
+        keep = 0
+        for k in range(min(len(_CONTROL_OPEN) - 1, len(held)), 0, -1):
+            if held.endswith(_CONTROL_OPEN[:k]):
+                keep = k
+                break
+        emit = held[: len(held) - keep] if keep else held
+        held = held[len(held) - keep:] if keep else ""
+        if emit:
+            yield emit
+
+    if held:
+        yield held
+    if control_buf:
+        m = _CONTROL_RE.search(control_buf)
+        if m:
+            try:
+                parsed = json.loads(m.group(1))
+            except json.JSONDecodeError:
+                logger.warning("control del modelo no parseable: %s", m.group(1)[:150])
+            else:
+                turn_state["criticidad_llm"] = parsed.get("criticidad")
+                turn_state["confianza"] = parsed.get("confianza")
+                turn_state["dimensiones_cubiertas"] = parsed.get("dimensiones_cubiertas") or []
+                turn_state["red_flags"] = parsed.get("red_flags") or []
+                turn_state["sintomas"] = parsed.get("sintomas") or {}
+                if parsed.get("escalar"):
+                    turn_state["escalar"] = True
+                if parsed.get("fin_llamada"):
+                    turn_state["fin_llamada"] = True
 
 
 async def stream_agentic_response(
@@ -311,10 +367,16 @@ async def stream_agentic_response(
         usage.fallback_used = idx > 0
 
         try:
-            tools = make_tools(scenario, turn_state)
+            # Solo la búsqueda queda como herramienta real: la evaluación viaja
+            # en el bloque <control> del propio texto (una invocación por turno
+            # = primera palabra en ~1s; con la evaluación como tool, el modelo
+            # la ejecutaba ANTES de hablar y el paciente esperaba 4-7s en
+            # silencio, con llamadas cortadas por ElevenLabs — medido en vivo).
+            tools = [t for t in make_tools(scenario, turn_state)
+                     if t.name == "buscar_conocimiento_clinico"]
             async for chunk in _run_turn(
                 build_model(), tools, system_prompt, lc_messages,
-                usage, telemetry, model_name,
+                usage, telemetry, model_name, turn_state,
             ):
                 content_yielded = True
                 yield chunk
@@ -344,6 +406,24 @@ async def stream_agentic_response(
         usage.model_calls = 1
     if not usage.model_used:
         usage.model_used = settings.groq_model if usage.fallback_used else settings.gemini_model
+
+    # Ensemble con el modelo de triaje (antes vivía en la tool
+    # registrar_evaluacion): corre DESPUÉS del streaming, así no agrega ni un
+    # milisegundo antes de la primera palabra. Solo puede SUBIR la criticidad.
+    sintomas = turn_state.get("sintomas") or {}
+    if sintomas:
+        try:
+            from app.agent import triage_model
+
+            ml = triage_model.predict(sintomas)
+        except Exception:
+            ml = None
+        if ml:
+            orden = {"verde": 0, "amarillo": 1, "rojo": 2}
+            turn_state["criticidad_ml"] = ml["criticidad"]
+            llm_crit = turn_state.get("criticidad_llm") or "verde"
+            if orden.get(ml["criticidad"], 0) > orden.get(llm_crit, 0):
+                turn_state["criticidad_final"] = ml["criticidad"]
 
     # El contexto pre-inyectado también fundamenta la respuesta, así que cuenta
     # como "grounded" y sus fuentes son igual de citables que las de la tool.
