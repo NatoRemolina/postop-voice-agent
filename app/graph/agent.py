@@ -27,6 +27,60 @@ from app.graph.agent_prompt import AGENTIC_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
+try:
+    import mlflow
+    from mlflow.entities import SpanType
+
+    from app import observability
+
+    _MLFLOW_IMPORTABLE = True
+except Exception:  # mlflow no instalado o import fallido: el agente sigue igual
+    _MLFLOW_IMPORTABLE = False
+
+    class SpanType:  # stub: los sitios de llamada leen SpanType.AGENT/.LLM como
+        # expresión ANTES de que _mlflow_span pueda comprobar _MLFLOW_IMPORTABLE
+        # (evalúan los argumentos primero) — sin esto, con mlflow ausente,
+        # CADA turno de voz rompía con NameError. Verificado en pruebas locales.
+        AGENT = LLM = "UNKNOWN"
+
+
+def _mlflow_span(name: str, span_type, inputs: dict):
+    """`mlflow.start_span` es un @contextmanager normal (basado en contextvars),
+    así que entrarlo/salirlo a mano —en vez de un `with`— funciona bien a
+    través de los `yield` de un generador async: dentro del bloque, cualquier
+    span hijo (los propios más abajo, o los que crea `mlflow.langchain.autolog`
+    dentro de `create_agent`) queda anidado automáticamente bajo este. Se
+    devuelve (cm, span); si mlflow falla, ambos son None y el turno sigue
+    exactamente igual — una traza es observabilidad, nunca debe tumbar una
+    llamada de voz en curso.
+    """
+    if not (_MLFLOW_IMPORTABLE and observability.is_ready()):
+        return None, None
+    try:
+        cm = mlflow.start_span(name=name, span_type=span_type, attributes={})
+        span = cm.__enter__()
+        if inputs:
+            span.set_inputs(inputs)
+        return cm, span
+    except Exception:
+        logger.warning("no se pudo abrir el span de MLflow '%s'", name, exc_info=True)
+        return None, None
+
+
+def _mlflow_end(span_pair, outputs: dict | None = None, error: Exception | None = None):
+    cm, span = span_pair if span_pair else (None, None)
+    if cm is None:
+        return
+    try:
+        if outputs and span is not None:
+            span.set_outputs(outputs)
+        if error is not None:
+            cm.__exit__(type(error), error, error.__traceback__)
+        else:
+            cm.__exit__(None, None, None)
+    except Exception:
+        logger.warning("no se pudo cerrar el span de MLflow", exc_info=True)
+
 
 def _build_gemini_model():
     return ChatGoogleGenerativeAI(
@@ -331,6 +385,14 @@ async def stream_agentic_response(
     telemetry["herramientas_invocadas"] = []
     telemetry["grounded"] = False
 
+    last_user = next(
+        (m["content"] for m in reversed(history) if m.get("role") == "user"), ""
+    )
+    turn_span = _mlflow_span(
+        "turno_agente_clara", SpanType.AGENT,
+        inputs={"paciente_dijo": last_user, "escenario": scenario, "n_turnos_historial": len(history)},
+    )
+
     # Un turno agéntico puede llamar al modelo varias veces (ciclo de tool
     # calling); se cuenta desde cero y se acumula por chunk, en vez de heredar
     # el default de TurnUsage pensado para una sola llamada por turno.
@@ -368,95 +430,123 @@ async def stream_agentic_response(
 
     turn_state: dict = {}
     content_yielded = False
-    for idx, (breaker_key, build_model, model_name) in enumerate(cascada):
-        es_ultimo = idx == len(cascada) - 1
-        if circuit_breaker.is_down(breaker_key):
-            logger.info("%s en cooldown, se salta sin intentar.", model_name)
-            if es_ultimo:
-                raise RuntimeError(f"Todos los proveedores en cooldown (último: {model_name})")
-            continue
-        # Turno limpio en cada intento: ninguna tool tiene efectos externos
-        # (todo vive en turn_state), así que reintentar el turno completo con
-        # otro proveedor es seguro aunque el anterior ya hubiera llamado tools.
-        turn_state.clear()
-        telemetry["herramientas_invocadas"] = []
-        usage.model_calls = 0
-        usage.input_tokens = 0
-        usage.output_tokens = 0
-        usage.fallback_used = idx > 0
+    turn_error: Exception | None = None
+    try:
+        for idx, (breaker_key, build_model, model_name) in enumerate(cascada):
+            es_ultimo = idx == len(cascada) - 1
+            if circuit_breaker.is_down(breaker_key):
+                logger.info("%s en cooldown, se salta sin intentar.", model_name)
+                if es_ultimo:
+                    raise RuntimeError(f"Todos los proveedores en cooldown (último: {model_name})")
+                continue
+            # Turno limpio en cada intento: ninguna tool tiene efectos externos
+            # (todo vive en turn_state), así que reintentar el turno completo con
+            # otro proveedor es seguro aunque el anterior ya hubiera llamado tools.
+            turn_state.clear()
+            telemetry["herramientas_invocadas"] = []
+            usage.model_calls = 0
+            usage.input_tokens = 0
+            usage.output_tokens = 0
+            usage.fallback_used = idx > 0
 
-        try:
-            # Solo la búsqueda queda como herramienta real: la evaluación viaja
-            # en el bloque <control> del propio texto (una invocación por turno
-            # = primera palabra en ~1s; con la evaluación como tool, el modelo
-            # la ejecutaba ANTES de hablar y el paciente esperaba 4-7s en
-            # silencio, con llamadas cortadas por ElevenLabs — medido en vivo).
-            tools = [t for t in make_tools(scenario, turn_state)
-                     if t.name == "buscar_conocimiento_clinico"]
-            async for chunk in _run_turn(
-                build_model(), tools, system_prompt, lc_messages,
-                usage, telemetry, model_name, turn_state,
-            ):
-                content_yielded = True
-                yield chunk
-            break
-        except Exception as exc:
-            cooldown = circuit_breaker.mark_down(breaker_key, exc)
-            if content_yielded:
-                # Ya se le habló algo al paciente: no se puede "retractar" y
-                # repetir el turno con otro modelo. Se corta con gracia.
-                logger.exception(
-                    "%s falló a mitad de turno agéntico; se corta sin reintentar.",
-                    model_name,
-                )
-                break
-            if es_ultimo:
-                # Se agotó la cascada sin decir nada: la excepción debe
-                # propagarse a app/routers/chat.py, que tiene el mensaje de
-                # disculpa hablado. Absorberla acá dejaría silencio total.
-                logger.error("Todos los proveedores fallaron este turno agéntico.")
-                raise
-            logger.warning(
-                "%s no disponible (%s, cooldown %ss); reintentando el turno completo con %s.",
-                model_name, exc, cooldown, cascada[idx + 1][2],
+            intento_span = _mlflow_span(
+                f"intento::{breaker_key}", SpanType.LLM,
+                inputs={"modelo": model_name, "es_reintento": idx > 0},
             )
+            try:
+                # Solo la búsqueda queda como herramienta real: la evaluación viaja
+                # en el bloque <control> del propio texto (una invocación por turno
+                # = primera palabra en ~1s; con la evaluación como tool, el modelo
+                # la ejecutaba ANTES de hablar y el paciente esperaba 4-7s en
+                # silencio, con llamadas cortadas por ElevenLabs — medido en vivo).
+                tools = [t for t in make_tools(scenario, turn_state)
+                         if t.name == "buscar_conocimiento_clinico"]
+                async for chunk in _run_turn(
+                    build_model(), tools, system_prompt, lc_messages,
+                    usage, telemetry, model_name, turn_state,
+                ):
+                    content_yielded = True
+                    yield chunk
+                _mlflow_end(intento_span, outputs={
+                    "tokens_entrada": usage.input_tokens, "tokens_salida": usage.output_tokens,
+                    "herramientas_usadas": telemetry.get("herramientas_invocadas") or [],
+                })
+                break
+            except Exception as exc:
+                _mlflow_end(intento_span, error=exc)
+                cooldown = circuit_breaker.mark_down(breaker_key, exc)
+                if content_yielded:
+                    # Ya se le habló algo al paciente: no se puede "retractar" y
+                    # repetir el turno con otro modelo. Se corta con gracia.
+                    logger.exception(
+                        "%s falló a mitad de turno agéntico; se corta sin reintentar.",
+                        model_name,
+                    )
+                    break
+                if es_ultimo:
+                    # Se agotó la cascada sin decir nada: la excepción debe
+                    # propagarse a app/routers/chat.py, que tiene el mensaje de
+                    # disculpa hablado. Absorberla acá dejaría silencio total.
+                    logger.error("Todos los proveedores fallaron este turno agéntico.")
+                    raise
+                logger.warning(
+                    "%s no disponible (%s, cooldown %ss); reintentando el turno completo con %s.",
+                    model_name, exc, cooldown, cascada[idx + 1][2],
+                )
 
-    if usage.model_calls == 0:
-        usage.model_calls = 1
-    if not usage.model_used:
-        usage.model_used = settings.groq_model if usage.fallback_used else settings.gemini_model
+        if usage.model_calls == 0:
+            usage.model_calls = 1
+        if not usage.model_used:
+            usage.model_used = settings.groq_model if usage.fallback_used else settings.gemini_model
 
-    # Ensemble con el modelo de triaje (antes vivía en la tool
-    # registrar_evaluacion): corre DESPUÉS del streaming, así no agrega ni un
-    # milisegundo antes de la primera palabra. Solo puede SUBIR la criticidad.
-    sintomas = turn_state.get("sintomas") or {}
-    if sintomas:
-        try:
-            from app.agent import triage_model
+        # Ensemble con el modelo de triaje (antes vivía en la tool
+        # registrar_evaluacion): corre DESPUÉS del streaming, así no agrega ni un
+        # milisegundo antes de la primera palabra. Solo puede SUBIR la criticidad.
+        sintomas = turn_state.get("sintomas") or {}
+        if sintomas:
+            try:
+                from app.agent import triage_model
 
-            ml = triage_model.predict(sintomas)
-        except Exception:
-            ml = None
-        if ml:
-            orden = {"verde": 0, "amarillo": 1, "rojo": 2}
-            turn_state["criticidad_ml"] = ml["criticidad"]
-            llm_crit = turn_state.get("criticidad_llm") or "verde"
-            if orden.get(ml["criticidad"], 0) > orden.get(llm_crit, 0):
-                turn_state["criticidad_final"] = ml["criticidad"]
+                ml = triage_model.predict(sintomas)
+            except Exception:
+                ml = None
+            if ml:
+                orden = {"verde": 0, "amarillo": 1, "rojo": 2}
+                turn_state["criticidad_ml"] = ml["criticidad"]
+                llm_crit = turn_state.get("criticidad_llm") or "verde"
+                if orden.get(ml["criticidad"], 0) > orden.get(llm_crit, 0):
+                    turn_state["criticidad_final"] = ml["criticidad"]
 
-    # El contexto pre-inyectado también fundamenta la respuesta, así que cuenta
-    # como "grounded" y sus fuentes son igual de citables que las de la tool.
-    telemetry["grounded"] = bool(turn_state.get("grounded", False)) or bool(rag_sources)
-    telemetry["criticidad_llm"] = turn_state.get("criticidad_llm")
-    telemetry["criticidad_ml"] = turn_state.get("criticidad_ml")
-    telemetry["rag_sources"] = (turn_state.get("rag_sources") or []) + rag_sources
-    # "escalar" es el valor crudo que reportó la tool; "escalar_efectivo" es el
-    # que realmente viaja en el <control> ya con la red de seguridad aplicada
-    # (ver _control_block) — se guardan ambos para poder auditar discrepancias.
-    telemetry["escalar"] = bool(turn_state.get("escalar", False))
-    telemetry["fin_llamada"] = bool(turn_state.get("fin_llamada", False))
+        # El contexto pre-inyectado también fundamenta la respuesta, así que cuenta
+        # como "grounded" y sus fuentes son igual de citables que las de la tool.
+        telemetry["grounded"] = bool(turn_state.get("grounded", False)) or bool(rag_sources)
+        telemetry["criticidad_llm"] = turn_state.get("criticidad_llm")
+        telemetry["criticidad_ml"] = turn_state.get("criticidad_ml")
+        telemetry["rag_sources"] = (turn_state.get("rag_sources") or []) + rag_sources
+        # "escalar" es el valor crudo que reportó la tool; "escalar_efectivo" es el
+        # que realmente viaja en el <control> ya con la red de seguridad aplicada
+        # (ver _control_block) — se guardan ambos para poder auditar discrepancias.
+        telemetry["escalar"] = bool(turn_state.get("escalar", False))
+        telemetry["fin_llamada"] = bool(turn_state.get("fin_llamada", False))
 
-    control_payload = _control_payload(turn_state)
-    telemetry["escalar_efectivo"] = control_payload["escalar"]
+        control_payload = _control_payload(turn_state)
+        telemetry["escalar_efectivo"] = control_payload["escalar"]
 
-    yield _control_block(control_payload)
+        yield _control_block(control_payload)
+    except Exception as exc:
+        turn_error = exc
+        raise
+    finally:
+        _mlflow_end(
+            turn_span,
+            outputs={
+                "criticidad_final": turn_state.get("criticidad_final") or turn_state.get("criticidad_llm"),
+                "escalo": turn_state.get("escalar", False),
+                "modelo_usado": usage.model_used,
+                "uso_respaldo": usage.fallback_used,
+                "tokens_entrada": usage.input_tokens,
+                "tokens_salida": usage.output_tokens,
+                "regla_acumulacion_disparada": turn_state.get("regla_acumulacion", False),
+            },
+            error=turn_error,
+        )

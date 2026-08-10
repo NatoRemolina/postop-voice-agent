@@ -123,6 +123,38 @@ crecimiento natural, si el volumen lo exigiera, es **PostgreSQL con pgvector**
 —un solo motor transaccional para vectores y datos relacionales, con
 concurrencia real— no un warehouse analítico.
 
+### Decisión 6 — Observabilidad: MLflow Tracing con cliente ligero + servidor aparte
+
+Se agregó MLflow Tracing como capa de observabilidad además de los registros
+propios (`turns.jsonl`, `/api/metrics`): cada turno de voz genera una traza
+navegable con sub-spans por proveedor de modelo (Gemini/Groq) y por búsqueda
+RAG (denso + BM25), capturados automáticamente vía `mlflow.langchain.autolog()`
+y anidados bajo un span manual del turno (`app/graph/agent.py`).
+
+Dos decisiones no obvias, ambas verificadas antes de tocar producción:
+
+1. **Paquete ligero en el backend, no el completo.** El paquete `mlflow`
+   completo fija `pandas<3`, y el proyecto usa `pandas==3.0.5` para el
+   ETL/EDA — instalarlo junto rompe la resolución de dependencias
+   (`ResolutionImpossible`, verificado). Se usa `mlflow-tracing` (cliente sin
+   esa pin) en `requirements.txt`, y el visor completo (`mlflow server`) corre
+   en un **venv aparte** (`requirements-mlflow-ui.txt`) — separa la escritura
+   de trazas (parte del camino de voz) del visor pesado (solo para inspección
+   humana), que es además la arquitectura que MLflow recomienda en producción.
+2. **Guardián de timeout duro.** El cliente ligero solo sabe hablar con un
+   servidor de trazas por HTTP (no escribe SQLite directo). Se midió en
+   pruebas que una conexión a un servidor inalcanzable puede colgarse más de
+   60 s con la configuración por defecto — inaceptable para el arranque
+   (compuerta de 15 minutos) o para no interrumpir un turno de voz. La
+   inicialización corre en un hilo aparte con `join(timeout=5)`, más
+   variables de entorno que fuerzan un fallo rápido (~2 s) si el servidor no
+   responde; una bandera compartida (`app/observability.py`) le dice al
+   agente si de verdad quedó listo, así nunca reintenta contra un servidor
+   caído en medio de una llamada. **Verificado**: con el servidor de trazas
+   apagado, el backend arranca en ~2 s y cada turno responde igual de rápido,
+   solo sin trazas — nunca se compromete la voz en tiempo real por
+   observabilidad.
+
 ## 3. Prompts
 
 Versionados como código (la rúbrica pide el rastro):

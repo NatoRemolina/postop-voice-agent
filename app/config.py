@@ -35,5 +35,19 @@ class Settings(BaseSettings):
     # En False, el sistema se comporta exactamente como antes de la migración.
     agentic_rag_enabled: bool = True
 
+    # Observabilidad: MLflow Tracing, local y sin servicio externo (file store
+    # en mlflow_data/, igual filosofía que ChromaDB/SQLite). Si mlflow no está
+    # instalado o falla al inicializar, el sistema sigue funcionando idéntico
+    # con solo un warning — nunca bloquea una llamada de voz.
+    mlflow_enabled: bool = True
+    # Apunta a un `mlflow server` real corriendo aparte (ver
+    # requirements-mlflow-ui.txt): el cliente ligero (mlflow-tracing) NO sabe
+    # escribir directo a un archivo/SQLite, solo hablar con un servidor por
+    # HTTP. Si nadie levantó ese servidor (p. ej. un clon local sin el paso
+    # opcional), la conexión falla rápido (ver guardián de timeout en
+    # app/main.py) y el sistema sigue funcionando idéntico, sin trazas.
+    mlflow_tracking_uri: str = "http://127.0.0.1:5605"
+    mlflow_experiment_name: str = "clara-postop-agent"
+
 
 settings = Settings()

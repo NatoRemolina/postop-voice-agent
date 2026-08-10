@@ -1,0 +1,13 @@
+# Venv APARTE del backend (no lo mezcles con requirements.txt): el paquete
+# "mlflow" completo fija pandas<3 y choca con pandas==3.0.5 que usan el ETL y
+# el EDA del proyecto. Este archivo solo sirve para levantar el visor de
+# trazas (mlflow server), que lee el mismo mlflow_data/mlflow.db que escribe
+# el backend a través del cliente ligero (mlflow-tracing, en requirements.txt).
+#
+# Uso:
+#   python3 -m venv .venv-mlflow-ui
+#   .venv-mlflow-ui/bin/pip install -r requirements-mlflow-ui.txt
+#   .venv-mlflow-ui/bin/mlflow server \
+#       --backend-store-uri sqlite:///mlflow_data/mlflow.db \
+#       --host 127.0.0.1 --port 5605
+mlflow==3.15.1

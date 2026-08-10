@@ -72,6 +72,34 @@ curl -s http://localhost:8600/health                 # → {"status":"ok"}
 curl -s http://localhost:8600/api/documents | head   # → corpus indexado (106 docs, ver nota)
 ```
 
+### Observabilidad con MLflow Tracing (opcional, no cuenta en los 15 minutos)
+
+El backend intenta enviar trazas (una por turno, con sub-spans por proveedor
+de modelo y por búsqueda RAG) a un `mlflow server` local. **Si ese servidor no
+está corriendo, el sistema arranca y responde exactamente igual** — el intento
+falla en ~2 s y queda solo un WARNING en el log; nunca bloquea un turno de voz
+(verificado: una conexión colgada al tracking server puede tardar más de 60 s
+con la configuración por defecto, así que se fuerza un timeout corto vía
+variables de entorno y, además, la inicialización corre en un hilo con un
+límite duro de 5 s). Para verlo en acción:
+
+```bash
+python3 -m venv .venv-mlflow-ui
+.venv-mlflow-ui/bin/pip install -r requirements-mlflow-ui.txt
+.venv-mlflow-ui/bin/mlflow server --backend-store-uri sqlite:///mlflow_data/mlflow.db \
+    --host 127.0.0.1 --port 5605
+```
+
+Con eso corriendo (antes o después de arrancar el backend, en cualquier
+orden), abrir `http://localhost:5605` muestra cada llamada como una traza
+navegable: el turno completo, qué proveedor respondió (Gemini o el respaldo
+Groq), las búsquedas RAG con sus resultados, y la criticidad/escalamiento
+decididos. Va en un **venv aparte** (`requirements-mlflow-ui.txt`) porque el
+paquete `mlflow` completo fija `pandas<3`, y el proyecto usa `pandas==3.0.5`
+para el ETL/EDA — el backend en sí solo instala el cliente ligero
+(`mlflow-tracing`, ya incluido en `requirements.txt`), que habla con este
+servidor por HTTP y no tiene ese conflicto.
+
 ---
 
 ## Arquitectura (resumen)

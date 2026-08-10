@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .venv/
+.venv-mlflow-ui/
 venv/
 *.egg-info/
 
@@ -20,6 +21,7 @@ build/
 chroma_data/
 *.sqlite3
 data/*.jsonl
+mlflow_data/
 
 # OS
 .DS_Store
@@ -27,3 +29,4 @@ data/*.jsonl
 # Logs
 *.log
 logs/
+mlruns/

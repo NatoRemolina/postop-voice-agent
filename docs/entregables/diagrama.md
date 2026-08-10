@@ -42,6 +42,7 @@ flowchart TB
 
         ADMIN["Consola /admin + API REST para Lovable<br/>(web.py: consola · documents.py · calls.py ·<br/>metrics.py · CORS en app/main.py)"]
         METRICS["GET /api/metrics<br/>P50/P95, tokens, costo<br/>(routers/metrics.py + app/metrics.py)"]
+        MLF["MLflow Tracing: 1 traza por turno,<br/>sub-spans por proveedor y por búsqueda RAG<br/>(app/graph/agent.py + mlflow.langchain.autolog)<br/>opcional — timeout corto si no hay servidor"]
     end
 
     subgraph datos["Datos del reto"]
@@ -65,6 +66,8 @@ flowchart TB
     ADMIN --> DOCS
     ADMIN --> SUMM
     WH --> PKL --> ML
+    PRE -.->|"traza"| MLF
+    LLM -.->|"traza"| MLF
 ```
 
 ## 2. Flujo de decisión del agente
