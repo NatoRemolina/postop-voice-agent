@@ -100,6 +100,29 @@ verificables en logs).
   (el EDA demostró que casi determina la etiqueta; análisis en
   [../analisis/dataset-eda.md](../analisis/dataset-eda.md)).
 
+### Decisión 5 — Persistencia: metadata rica sobre motores embebidos, no un warehouse analítico
+
+El "conocimiento vivo" y la trazabilidad no se resuelven con más infraestructura
+sino con **metadata por fragmento**: cada chunk indexado lleva
+`{doc_id, source, page, scenario, uploaded}`. Esa sola decisión habilita las
+cuatro cosas que pide el reto: filtrar por procedimiento antes de buscar, citar
+documento y página, reemplazar una versión completa de un documento
+(`doc_id` determinista por nombre+escenario ⇒ re-subir borra la versión previa,
+sin contaminación entre versiones — verificado en producción) y olvidar de forma
+selectiva.
+
+La persistencia usa tres motores embebidos, todos en disco y sin servicios
+externos: **ChromaDB** (vectores + metadata), **SQLite** (warehouse del dataset,
+160 casos / 3.991 turnos) y **JSONL** (turnos, resúmenes y alertas, append-only
+y auditables a ojo). Se evaluó explícitamente **BigQuery y se descartó**: es un
+warehouse analítico por lotes, con latencia de segundos y costo por consulta,
+que no aporta nada al conocimiento vivo (su fortaleza es el análisis masivo, no
+la búsqueda vectorial en línea) y agregaría una credencial y una dependencia de
+red al levantamiento, comprometiendo la compuerta de 15 minutos. La ruta de
+crecimiento natural, si el volumen lo exigiera, es **PostgreSQL con pgvector**
+—un solo motor transaccional para vectores y datos relacionales, con
+concurrencia real— no un warehouse analítico.
+
 ## 3. Prompts
 
 Versionados como código (la rúbrica pide el rastro):
@@ -133,6 +156,47 @@ los problemas encontrados y su corrección:
   latencia de herramientas-antes-de-hablar descrita en la Decisión 2.
 - Métricas del README generadas por script (`scripts/report_metrics.py`) desde
   los mismos logs que el jurado puede inspeccionar — sin números a mano.
+
+## 4b. Evaluación: qué se midió y qué falló
+
+Existe un arnés reproducible (`scripts/eval_replay.py`) que reproduce
+conversaciones **reales del dataset etiquetado** contra el servidor desplegado y
+compara la criticidad final del agente con `label_ground_truth`. Resultados y
+transcripciones completas en `data/eval/results.json`.
+
+**El hallazgo más valioso fue un fallo, no un acierto.** La primera corrida
+válida arrojó **2 falsos negativos** en los casos rojos — precisamente los de
+pacientes con estilo *minimizador*: reportan cada señal como leve ("un poquito
+molesto no más, uno aguanta", "37 y algo ayer", "rojita pero nada de pus") y el
+agente cerraba en amarillo. Es exactamente la falla que la rúbrica califica como
+catastrófica. Dos correcciones, ambas guiadas por los datos:
+
+1. **Regla anti-minimización en el prompt**: lo vago o viejo no cuenta como
+   verificado (una temperatura de ayer no es una medición vigente); nunca
+   declarar "normal" un valor no medido ahora; ante minimización repetida con
+   señales alteradas, la duda juega contra el paciente que minimiza.
+2. **Guardrail determinista** (`app/graph/agent.py:_acumulacion_es_rojo`),
+   calibrado contra el warehouse: la tripleta *herida alterada + apetito muy
+   disminuido + sueño muy alterado* aparece en **12/12 casos rojo**, 6 amarillos
+   y **cero verdes**. Cuando se cumple, la criticidad se fuerza a rojo aunque el
+   LLM haya dicho amarillo. Sobre-escalar 6 amarillos es un costo aceptable bajo
+   la asimetría clínica de la rúbrica; perder un rojo no lo es.
+
+Tras el arreglo, los mismos dos casos pasan a **ACIERTO con escalamiento**.
+
+**Sondas adversariales** (mismo arnés): intento de inyección de prompt →
+RESISTIÓ; petición de dosis de tramadol en miligramos → NO RECETÓ.
+
+**Compuerta G5 verificada en producción** con un documento externo al corpus:
+subir un protocolo ficticio → el agente lo cita; subir una versión 2 con el
+mismo nombre → responde con la versión nueva, sin rastro de la anterior;
+eliminarlo → "no conozco ese protocolo específico" (declara el límite en vez de
+improvisar).
+
+**Limitación honesta**: la evaluación cubre 6 casos clínicos + 2 sondas, no los
+160 casos del dataset. Las cuotas gratuitas diarias de los proveedores no
+alcanzaban para una corrida completa sin comprometer la demo en vivo. El arnés
+está listo para escalar a la muestra completa cuando la cuota lo permita.
 
 ## 5. Gobernanza de datos
 
