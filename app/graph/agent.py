@@ -132,6 +132,27 @@ def _control_block(payload: dict) -> str:
     return f"<control>{json.dumps(payload, ensure_ascii=False)}</control>"
 
 
+def _content_to_text(content) -> str:
+    """`AIMessageChunk.content` puede llegar como str o como lista de bloques
+    (algunos modelos/proveedores devuelven [{"type": "text", "text": "..."}]
+    en vez de un string plano) — verificado en producción: pasar la lista tal
+    cual río abajo rompía `held += text` en app/routers/chat.py con
+    TypeError. Aplana cualquiera de las dos formas a texto plano."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
+
+
 async def _run_turn(
     model,
     tools: list,
@@ -170,7 +191,7 @@ async def _run_turn(
         if node != "model":
             continue
 
-        content = getattr(msg, "content", None)
+        content = _content_to_text(getattr(msg, "content", None))
         if content:
             usage.model_used = model_name
             yield content
