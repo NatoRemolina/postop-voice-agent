@@ -13,7 +13,7 @@ flowchart TB
     end
 
     subgraph voz["Capa de voz — ElevenLabs Agents"]
-        EL["Agente 'Clara'<br/>STT · detección de turnos · interrupciones · TTS<br/>voz configurable (41 voces es, selector de acento)"]
+        EL["Agente 'Clara'<br/>STT · detección de turnos · interrupciones · TTS<br/>voz configurable (~40 voces en español, selector de acento)"]
     end
 
     subgraph backend["Backend — FastAPI en AWS EC2 (HTTPS)"]
@@ -21,10 +21,11 @@ flowchart TB
 
         subgraph agente["Agente por turno (app/graph/)"]
             PRE["Prefetch RAG (modo rápido)<br/>búsqueda híbrida sin ayudantes LLM<br/>(agent.py:_prefetch_context)"]
-            LLM["Una invocación del modelo por turno<br/>cascada: Gemini 3.6 Flash → Llama 3.3 70B → Llama 3.1 8B<br/>circuit breakers por cuota (agent.py + circuit_breaker.py)"]
+            LLM["Una invocación del modelo en el camino nominal<br/>(dos si el modelo decide usar la herramienta)<br/>cascada: Gemini 3.6 Flash → Llama 3.3 70B → Llama 3.1 8B<br/>circuit breakers por cuota (agent.py + circuit_breaker.py)"]
             TOOL["Herramienta opcional:<br/>buscar_conocimiento_clinico<br/>(tools.py — modo completo con reescritura+calificación)"]
-            CTRL["Bloque &lt;control&gt; al final del texto:<br/>criticidad · red flags · síntomas estructurados<br/>— se separa, NUNCA llega al TTS"]
+            CTRL["Bloque &lt;control&gt; al final del texto:<br/>criticidad · red flags · síntomas estructurados<br/>— se separa, NUNCA llega al TTS<br/>(agent.py:_run_turn · chat.py)"]
             ML["Ensemble de triaje post-streaming<br/>Random Forest (data/triage_model.pkl)<br/>solo puede SUBIR la criticidad (agent.py)"]
+            ACUM["Guardrail determinista de acumulación:<br/>herida alterada + apetito muy disminuido +<br/>sueño muy alterado ⇒ rojo<br/>(agent.py:_acumulacion_es_rojo)"]
         end
 
         subgraph conocimiento["Conocimiento vivo"]
@@ -36,11 +37,11 @@ flowchart TB
         subgraph registro["Trazabilidad y decisión"]
             TURNS[("data/turns.jsonl<br/>por turno: fuentes citadas, latencia,<br/>tokens, modelo real usado, decisión")]
             ALERTS[("data/alerts.jsonl<br/>alertas persistentes al escalar")]
-            SUMM["Resumen estructurado por llamada<br/>(app/agent/summary.py + deep_summary.py)"]
+            SUMM["Resumen estructurado por llamada<br/>escribe la alerta al persistirse<br/>(app/agent/summary.py:persist_summary)"]
         end
 
-        ADMIN["Consola /admin + API REST para Lovable<br/>documentos · llamadas · alertas · métricas<br/>(app/routers/web.py · CORS abierto)"]
-        METRICS["GET /api/metrics<br/>P50/P95, tokens, costo<br/>(app/metrics.py)"]
+        ADMIN["Consola /admin + API REST para Lovable<br/>(web.py: consola · documents.py · calls.py ·<br/>metrics.py · CORS en app/main.py)"]
+        METRICS["GET /api/metrics<br/>P50/P95, tokens, costo<br/>(routers/metrics.py + app/metrics.py)"]
     end
 
     subgraph datos["Datos del reto"]
@@ -56,10 +57,10 @@ flowchart TB
     TOOL --> BM25
     PRE --> CHROMA
     PRE --> BM25
-    LLM --> CTRL --> ML
+    LLM --> CTRL --> ACUM --> ML
     ML --> TURNS
-    CTRL --> ALERTS
     TURNS --> SUMM
+    SUMM -->|"al persistir un caso escalado"| ALERTS
     DOCS --> CHROMA
     ADMIN --> DOCS
     ADMIN --> SUMM
@@ -79,7 +80,8 @@ flowchart TB
     ACLARA --> EVAL
     DIM -->|"Sí"| EVAL["Evaluar criticidad en el bloque<br/>de control (no hablado)"]
 
-    EVAL --> ENS["Ensemble: max(criticidad LLM,<br/>criticidad Random Forest)<br/>el ML nunca la baja"]
+    EVAL --> ACUM2["Guardrail de acumulación (código):<br/>herida alterada + apetito muy disminuido +<br/>sueño muy alterado ⇒ rojo<br/>calibrado: 12/12 rojos, 0 verdes del dataset"]
+    ACUM2 --> ENS["Ensemble: max(criticidad LLM,<br/>criticidad Random Forest)<br/>el ML nunca la baja"]
     ENS --> NIVEL{"¿Nivel?"}
 
     NIVEL -->|"VERDE<br/>evolución esperada"| VERDE["Cerrar con recomendaciones<br/>básicas de las guías"]
@@ -94,8 +96,8 @@ flowchart TB
     AMAR --> FIN
     ALERTA --> FIN
 
-    GUARD["Redes de seguridad deterministas<br/>(fuera del alcance del modelo):<br/>rojo ⇒ escalar siempre ·<br/>escalar ⇒ nunca queda en verde ·<br/>sin dosis ni medicamentos inventados ·<br/>inyección de prompt ignorada"] -.-> EVAL
-    GUARD -.-> NIVEL
+    GUARD["Redes deterministas EN CÓDIGO<br/>(fuera del alcance del modelo):<br/>rojo ⇒ escalar siempre ·<br/>escalar ⇒ nunca queda en verde<br/>(agent.py:_control_payload)"] -.-> NIVEL
+    POLIT["Reglas del system prompt<br/>(agent_prompt.py):<br/>sin dosis ni medicamentos inventados ·<br/>inyección de prompt ignorada ·<br/>anti-minimización del paciente"] -.-> EVAL
 ```
 
 ## 3. Cascada de modelos y degradación (todo en nivel gratuito)
@@ -104,10 +106,10 @@ flowchart TB
 flowchart LR
     T["Turno"] --> G{"¿Gemini 3.6 Flash<br/>disponible?"}
     G -->|"sí"| OK1["Genera<br/>(modelo primario)"]
-    G -->|"429 / error<br/>(circuit breaker 10 min)"| L70{"¿Llama 3.3 70B<br/>(Groq) disponible?"}
+    G -->|"429 / error → circuit breaker<br/>10 min (cuota diaria) · 65 s (por minuto)"| L70{"¿Llama 3.3 70B<br/>(Groq) disponible?"}
     L70 -->|"sí"| OK2["Genera<br/>(respaldo 1)"]
     L70 -->|"cuota agotada"| L8{"¿Llama 3.1 8B<br/>(Groq) disponible?"}
     L8 -->|"sí"| OK3["Genera<br/>(respaldo 2)"]
-    L8 -->|"no"| DISC["Mensaje de disculpa hablado<br/>(nunca silencio total)"]
+    L8 -->|"no"| DISC["Si falla ANTES de hablar: disculpa hablada<br/>Si falla a mitad de turno: corte con gracia<br/>(no se retracta lo ya dicho)"]
     OK1 & OK2 & OK3 --> REG["turns.jsonl registra QUÉ modelo<br/>respondió realmente cada turno"]
 ```

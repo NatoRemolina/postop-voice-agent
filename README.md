@@ -31,16 +31,31 @@ cd postop-voice-agent
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-# 2. Credenciales (~1 min) — copiar la plantilla y pegar las claves entregadas
+# 2. Credenciales (~1 min)
 cp .env.example .env
 # editar .env: GEMINI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, GROQ_API_KEY
 
-# 3. Indexar el corpus clínico (~5 min, una sola vez)
+# 3. Indexar el corpus clínico (~2 min, una sola vez)
 .venv/bin/python -m scripts.ingest_corpus
 
 # 4. Arrancar
 .venv/bin/uvicorn app.main:app --port 8600
 ```
+
+**Sobre las credenciales**: las claves de esta entrega se envían junto con el
+repositorio en el formulario del reto. Si no se tienen a mano, el sistema
+**arranca igual con valores cualquiera**: la consola `/admin`, el corpus, las
+métricas y todas las APIs son navegables; solo la conversación con el modelo
+responde "tuve un problema técnico" (es la degradación diseñada ante un
+proveedor no disponible, no una falla del levantamiento). Las claves propias se
+crean gratis en Google AI Studio (Gemini), console.groq.com (Llama) y
+elevenlabs.io (voz).
+
+**Notas del levantamiento** (medidas en un clon limpio: **2 min 22 s** en total):
+- La instalación descarga ~150-200 MB de dependencias; con caché de pip fría y
+  red lenta puede tardar bastante más que los ~50 s medidos aquí.
+- Si el puerto 8600 está ocupado, usar `--port <otro>` y sustituirlo en las URLs.
+- Probado con Python 3.12 y 3.14.
 
 Abrir `http://localhost:8600/admin` (consola) y `http://localhost:8600/call`
 (llamada de voz). **Nota sobre la voz en local**: el agente de ElevenLabs invoca
@@ -54,7 +69,7 @@ apuntada de forma permanente.
 
 ```bash
 curl -s http://localhost:8600/health                 # → {"status":"ok"}
-curl -s http://localhost:8600/api/documents | head   # → corpus indexado (106 docs)
+curl -s http://localhost:8600/api/documents | head   # → corpus indexado (106 docs, ver nota)
 ```
 
 ---
@@ -146,7 +161,7 @@ extrapola a precios de producción; no incluye la plataforma de voz de ElevenLab
 | `etl/` + `data/warehouse.db` | ETL del dataset del reto → warehouse SQLite (160 casos, 3.991 turnos) |
 | `data/triage_model.pkl` | Modelo de triaje (Random Forest) entrenado con los casos etiquetados |
 | `scripts/` | Ingesta del corpus, ETL, entrenamiento del modelo, reporte de métricas, EDA |
-| `dataset/` | Los datos del reto tal como se entregaron (corpus de 107 PDFs incluido) |
+| `dataset/` | Los datos del reto tal como se entregaron. El corpus trae **107 PDFs**; uno de `Appendicitis/` es un escaneo sin capa de texto extraíble (el propio reto lo advierte) y la ingesta lo omite registrándolo en el log → **106 documentos indexados** |
 | `docs/` | Arquitectura, análisis, gobernanza de datos y entregables |
 
 ## Licencia

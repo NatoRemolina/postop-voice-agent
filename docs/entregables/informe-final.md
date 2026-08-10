@@ -134,9 +134,12 @@ Versionados como código (la rúbrica pide el rastro):
   lo convierte en un costo real.
 - **Pipeline clásico de respaldo**: `app/agent/prompts.py` (interruptor
   `AGENTIC_RAG_ENABLED=false` — el sistema vuelve al pipeline fijo original).
-- **Resúmenes**: `app/agent/summary.py` (prompt de resumen estructurado) y
-  `app/agent/deep_summary.py` (agente post-llamada con herramientas de
-  verificación de citas contra el corpus).
+- **Resúmenes**: `app/agent/summary.py` (prompt de resumen estructurado; es el
+  que corre en producción). `app/agent/deep_summary.py` es un agente
+  verificador post-llamada escrito pero **no conectado**: su ciclo de
+  herramientas supera los 200 s contra los proveedores gratuitos y activarlo
+  degradaría el cierre de llamada — queda documentado como pendiente, no como
+  funcionalidad en uso.
 
 ## 4. Proceso de trabajo y evidencia
 

@@ -109,15 +109,22 @@ la asimetría clínica que exige la rúbrica (el falso negativo es la falla cata
 runtime todavía (se instalarán junto con el `.pkl` real); hasta entonces `predict()`
 degrada a `None` con gracia, sin excepciones.
 
-## 4. Agente profundo post-llamada (`app/agent/deep_summary.py`)
+## 4. Resumen post-llamada
 
-Al cerrar una llamada, un segundo agente (mismo patrón de modelos, sin presión de
-latencia de voz) reconstruye el resumen estructurado con herramientas de verificación
-propias: relee los turnos (`leer_turnos`), vuelve a consultar el corpus para confirmar
-que las citas dichas durante la llamada realmente están sustentadas
-(`buscar_en_corpus`), y consulta el modelo de triaje (`consultar_triaje`). Si falla por
-cualquier motivo, cae a `app/agent/summary.py` (el resumen determinista/Gemini que ya
-existía) — un resumen siempre se genera, nunca se pierde una llamada sin cierre.
+**Activo en producción**: `app/agent/summary.py`. Al cerrar la llamada
+(`POST /api/calls/{id}/summarize` o el webhook de ElevenLabs) genera el resumen
+estructurado con Gemini y, si el modelo no está disponible, cae a un resumen
+determinista construido desde los bloques de control de cada turno — nunca se pierde una
+llamada sin cierre. Al persistirse un caso escalado, escribe además la alerta en
+`data/alerts.jsonl`.
+
+**Escrito pero NO conectado**: `app/agent/deep_summary.py` es un agente verificador
+post-llamada (herramientas `leer_turnos`, `buscar_en_corpus` para confirmar que las citas
+dichas están realmente sustentadas, y `consultar_triaje`). Está implementado con el mismo
+contrato de salida que `summary.py`, pero en pruebas su ciclo de herramientas supera los
+200 s contra los proveedores gratuitos, así que **no se cableó a ninguna ruta**: activarlo
+sin resolver esa latencia degradaría el cierre de llamada. Queda como trabajo pendiente
+documentado, no como funcionalidad en uso.
 
 ## 5. Fallos reales encontrados y corregidos en esta sesión
 
