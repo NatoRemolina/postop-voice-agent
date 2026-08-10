@@ -1,0 +1,164 @@
+# Entregable 03 — Informe final
+
+Proyecto: **Clara**, agente de voz para seguimiento postoperatorio.
+Autora: Natalia Patricia Remolina Rodríguez.
+Repositorio: https://github.com/NatoRemolina/postop-voice-agent
+
+---
+
+## 1. Declaración del modelo (compuerta G3)
+
+**Modelo razonador primario: Google Gemini 3.6 Flash** (`gemini-3.6-flash`),
+consumido por API en su **nivel gratuito** de Google AI Studio.
+
+**Respaldo automático (misma llamada, sin intervención humana): Meta Llama 3.3
+70B** (`llama-3.3-70b-versatile`) y **Meta Llama 3.1 8B**
+(`llama-3.1-8b-instant`), ambos vía **Groq** en su nivel gratuito. Los tres
+pertenecen a familias explícitamente permitidas por el reto (Gemini Flash y
+Llama vía Groq).
+
+### Por qué esta combinación
+
+- **Gemini 3.6 Flash como primario**: la mejor calidad de razonamiento clínico
+  en español de las familias permitidas, decisión tomada al inicio del proyecto
+  priorizando calidad máxima. Se usa con `thinking_level="minimal"` — el
+  razonamiento extendido de los modelos 3.x, medido en producción, disparaba la
+  latencia del primer token a 5+ segundos, inviable en voz.
+- **La cascada no es un adorno, es una necesidad medida**: el nivel gratuito de
+  Gemini permite ~20 solicitudes/día — insuficiente incluso para una sola
+  sesión de pruebas. Descartamos deliberadamente pagar por más cuota (la
+  rúbrica exige el nivel gratuito) y en su lugar diseñamos degradación entre
+  familias permitidas. Cada turno registra en `data/turns.jsonl` **qué modelo
+  respondió realmente** (`model`, `fallback_used`) — la trazabilidad de esta
+  declaración es verificable en los logs.
+- **Circuit breakers por proveedor** (`app/agent/circuit_breaker.py`):
+  distinguen cuota diaria (cooldown 10 min) de cuota por minuto (cooldown 65 s)
+  leyendo el error real, para no gastar latencia en reintentos condenados.
+
+## 2. Arquitectura y decisiones técnicas principales
+
+(Diagrama completo: [diagrama.md](diagrama.md). Documentos de detalle:
+[../arquitectura/agentic-rag.md](../arquitectura/agentic-rag.md),
+[../arquitectura/etl.md](../arquitectura/etl.md).)
+
+### Decisión 1 — Custom LLM detrás de ElevenLabs, no sus piezas "listas"
+
+ElevenLabs Agents maneja la voz completa (STT, turnos, interrupciones, TTS) y
+llama a nuestro endpoint `/v1/chat/completions` como "Custom LLM". Alternativas
+evaluadas y descartadas:
+
+1. *Knowledge Base nativo de ElevenLabs*: tope de 5 archivos / 20 MB / 300 mil
+   caracteres — el corpus del reto son 107 PDFs / 127 MB — y retrieval caja
+   negra sin citas verificables ni "olvido" garantizado.
+2. *Armar la voz pieza a pieza* (Whisper + Piper/Kokoro + VAD propio): el
+   turn-taking natural es un problema enorme de ingeniería; la compuerta de voz
+   en vivo es eliminatoria y no admitía una demo frágil.
+3. *RAG como herramienta que el modelo decide invocar sin más*: riesgo de que
+   responda de memoria (alucinación clínica penalizada). El diseño final
+   **pre-inyecta** el contexto recuperado en cada turno y deja la herramienta
+   de búsqueda para profundizar.
+
+### Decisión 2 — Latencia de voz como restricción de diseño, no como métrica
+
+La iteración intermedia (evaluación clínica como herramienta que el modelo
+ejecutaba ANTES de hablar) medía 4-7 s de silencio por turno y ElevenLabs
+cortaba las llamadas — está documentado en los commits y en el historial de
+la API de ElevenLabs ("custom_llm generation failed"). El rediseño final:
+
+- **Nada corre entre el fin del habla del paciente y la primera palabra del
+  agente salvo una búsqueda vectorial local** (~200-400 ms) y la invocación
+  del modelo.
+- La evaluación clínica viaja como **bloque `<control>` al final del texto**
+  (nunca llega al TTS) y el ensemble de ML corre después del streaming.
+- Los ayudantes LLM del retrieval (reescritura de consulta coloquial →
+  clínica, calificación de relevancia) solo corren fuera del camino crítico.
+
+Resultado medido: **P50 de 1,07 s al primer token** (métricas §5 del README,
+verificables en logs).
+
+### Decisión 3 — RAG híbrido con citas como unidad básica
+
+- Denso (ChromaDB local + fastembed multilingüe) **+** léxico (BM25) con
+  fusión, filtrado por procedimiento del paciente detectado en conversación.
+- Cada pasaje conserva **documento fuente y página**; cada turno registra las
+  fuentes usadas → cada respuesta clínica es rastreable hasta el PDF real
+  (verificable en `data/turns.jsonl` y en el detalle de llamada de la consola).
+- El índice BM25 se reconstruye en cada búsqueda desde Chroma: el conocimiento
+  vivo (subir/eliminar en caliente) nunca sirve resultados obsoletos.
+
+### Decisión 4 — Doble opinión para la decisión clínica
+
+- El LLM clasifica cada turno (verde/amarillo/rojo) con sesgo explícito a
+  escalar ante la duda (la rúbrica: el falso negativo es la falla catastrófica).
+- Un **Random Forest** entrenado con los 160 casos etiquetados del reto
+  (recall 1.0 en rojo y amarillo por validación cruzada estratificada; model
+  card en [../analisis/modelo-triaje.md](../analisis/modelo-triaje.md)) da una
+  segunda opinión que **solo puede subir** la criticidad.
+- Redes de seguridad deterministas por fuera del modelo: rojo ⇒ escalar
+  siempre; un escalamiento nunca queda reportado como verde.
+- `arquitectura_trayectoria` se excluyó como feature por fuga de información
+  (el EDA demostró que casi determina la etiqueta; análisis en
+  [../analisis/dataset-eda.md](../analisis/dataset-eda.md)).
+
+## 3. Prompts
+
+Versionados como código (la rúbrica pide el rastro):
+
+- **Prompt del agente de voz**: `app/graph/agent_prompt.py` (persona,
+  indagación de las 6 dimensiones, política de escalamiento, seguridad
+  anti-inyección, formato del bloque de control). Deliberadamente compacto
+  (~600 tokens): se reenvía en cada turno y el presupuesto de cuota gratuita
+  lo convierte en un costo real.
+- **Pipeline clásico de respaldo**: `app/agent/prompts.py` (interruptor
+  `AGENTIC_RAG_ENABLED=false` — el sistema vuelve al pipeline fijo original).
+- **Resúmenes**: `app/agent/summary.py` (prompt de resumen estructurado) y
+  `app/agent/deep_summary.py` (agente post-llamada con herramientas de
+  verificación de citas contra el corpus).
+
+## 4. Proceso de trabajo y evidencia
+
+El desarrollo se hizo con asistencia intensiva de IA (Claude) bajo dirección
+humana, con verificación cruzada automatizada y pruebas reales sobre cada
+componente — el historial de commits es el registro fiel del proceso, incluidos
+los problemas encontrados y su corrección:
+
+- ETL con 7 checks de calidad y un verificador independiente que recalculó las
+  21 cifras del análisis exploratorio (todas coincidieron).
+- Bugs reales encontrados en pruebas en vivo y corregidos, cada uno con su
+  commit: el fallback automático de LangChain (`with_fallbacks`) no conmutaba
+  de forma confiable dentro del ciclo de tool-calling (se reemplazó por
+  reintento manual de turno completo); el presupuesto de herramientas podía
+  silenciar un escalamiento (la herramienta de escalar quedó exenta); el
+  contenido de los chunks podía llegar como lista y romper el streaming; la
+  latencia de herramientas-antes-de-hablar descrita en la Decisión 2.
+- Métricas del README generadas por script (`scripts/report_metrics.py`) desde
+  los mismos logs que el jurado puede inspeccionar — sin números a mano.
+
+## 5. Gobernanza de datos
+
+Resumen (documento completo: [../gobernanza-datos.md](../gobernanza-datos.md)):
+los datos de salud son sensibles bajo la Ley 1581 de 2012; el agente se
+presenta explícitamente como asistente de IA al abrir la llamada; minimización
+de PII en los listados (solo nombre de pila; cédula y dirección nunca viajan a
+los proveedores de modelo); derecho de supresión implementado
+(`DELETE /api/calls/{id}`); el dataset del reto es sintético y así se trata.
+
+## 6. Qué quedó fuera y qué seguiría (dos semanas más)
+
+1. **Evaluación automática completa**: replay de las 160 conversaciones
+   etiquetadas (capas limpia y ruidosa) contra el agente → matriz de confusión
+   del escalamiento y regresión por versión de prompt. (La infraestructura
+   existe — `data/eval/sample_cases.json`, warehouse—; la cuota gratuita diaria
+   de los proveedores no alcanzó para correrla completa dentro de la ventana
+   del reto sin comprometer la demo.)
+2. Retrieval híbrido con reranker + OCR para el PDF escaneado del corpus
+   (1/107 quedó fuera, detectado y registrado en la ingesta).
+3. Barge-in fino y streaming especulativo de TTS.
+4. Consentimiento verbal grabado y cifrado en reposo (gobernanza §4).
+5. Telefonía real (SIP) — el salto de demo a piloto.
+
+## 7. Capturas del demo
+
+*(Espacio reservado — se adjuntan con la grabación del video: consola con el
+corpus cargado, subida de documento en caliente, llamada con transcript en vivo,
+alerta y resumen estructurado tras un caso rojo.)*
