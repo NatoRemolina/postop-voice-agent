@@ -101,10 +101,29 @@ def _infer_confianza(turn_state: dict) -> str:
     return turn_state.get("confianza") or "baja"
 
 
+def _acumulacion_es_rojo(sintomas: dict) -> bool:
+    """Regla determinista calibrada contra el warehouse del reto: la tripleta
+    herida alterada + apetito muy disminuido + sueño muy alterado aparece en
+    los 12/12 casos rojo, en 6 amarillos (sobre-escalarlos es aceptable según
+    la asimetría clínica de la rúbrica) y en CERO verdes. Existe porque los
+    pacientes minimizadores reportan cada señal como "leve" y el LLM tendía a
+    cerrar en amarillo — el falso negativo que la rúbrica castiga más.
+    """
+    if not sintomas:
+        return False
+    herida = str(sintomas.get("herida") or "normal")
+    apetito = str(sintomas.get("apetito") or "normal")
+    sueno = str(sintomas.get("sueno") or "normal")
+    return herida != "normal" and apetito == "muy_disminuido" and sueno == "muy_alterado"
+
+
 def _control_payload(turn_state: dict) -> dict:
     criticidad = (
         turn_state.get("criticidad_final") or turn_state.get("criticidad_llm") or "verde"
     )
+    if criticidad != "rojo" and _acumulacion_es_rojo(turn_state.get("sintomas") or {}):
+        criticidad = "rojo"
+        turn_state["regla_acumulacion"] = True
     escalar_crudo = bool(turn_state.get("escalar", False))
     # Red de seguridad (doble vía):
     # 1. criticidad "rojo" siempre fuerza escalar=true, pase lo que pase con
