@@ -17,6 +17,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
+from app.agent import circuit_breaker
 from app.config import settings
 from app.rag.store import COLLECTION, embed_passages, embed_query, get_client, get_collection
 
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 _REWRITE_MODEL = "llama-3.1-8b-instant"
 _QUALIFY_MODEL = "llama-3.1-8b-instant"
+# Misma clave que usa la cascada de app/graph/agent.py para este modelo: es el
+# mismo cupo real (tokens/minuto de llama-3.1-8b-instant), así que compartir el
+# breaker evita que retrieval y la cascada se saturen mutuamente sin enterarse.
+_HELPER_BREAKER_KEY = "groq-8b"
 _LLM_TIMEOUT_S = 8
 _BRANCH_K = 8
 _SNIPPET_CHARS = 300
@@ -80,6 +85,14 @@ def _rewrite_query(query: str) -> tuple[Reescritura, bool]:
     Devuelve (reescritura, ok). Si algo falla, ok=False y se usa la consulta
     original tal cual (sin sub-consultas).
     """
+    # El 8B tiene un tope de 6.000 tokens/minuto y esta función lo consume dos
+    # veces por turno junto con _filter_relevant. En una llamada de voz real
+    # (turnos cada ~10s) ese presupuesto se agota en 2-3 turnos, y desde ahí
+    # cada intento es un 429 garantizado que solo agrega ~2s de latencia antes
+    # de degradar igual. Verificado en producción: fue la causa de que
+    # ElevenLabs cortara llamadas con "custom_llm generation failed".
+    if circuit_breaker.is_down(_HELPER_BREAKER_KEY):
+        return Reescritura(consulta_principal=query, sub_consultas=[]), False
     try:
         structured = _make_groq(_REWRITE_MODEL).with_structured_output(Reescritura)
         prompt = (
@@ -94,7 +107,8 @@ def _rewrite_query(query: str) -> tuple[Reescritura, bool]:
             raise ValueError("reescritura vacía o con forma inesperada")
         result.sub_consultas = [s.strip() for s in result.sub_consultas if s and s.strip()][:2]
         return result, True
-    except Exception:
+    except Exception as exc:
+        circuit_breaker.mark_down(_HELPER_BREAKER_KEY, exc)
         logger.warning("query rewrite failed, using original query", exc_info=True)
         return Reescritura(consulta_principal=query, sub_consultas=[]), False
 
@@ -195,6 +209,10 @@ def _filter_relevant(query: str, docs: list[Document]) -> list[Document]:
     todos relevantes (no se bloquea la respuesta por un fallo de calificación)."""
     if not docs:
         return []
+    # Mismo cupo de 6.000 tokens/minuto que _rewrite_query (ver nota allí):
+    # si ya está saturado, calificar es un 429 seguro que solo cuesta latencia.
+    if circuit_breaker.is_down(_HELPER_BREAKER_KEY):
+        return docs
     try:
         structured = _make_groq(_QUALIFY_MODEL).with_structured_output(Calificacion)
         snippets = "\n".join(
@@ -215,7 +233,8 @@ def _filter_relevant(query: str, docs: list[Document]) -> list[Document]:
         if not isinstance(result, Calificacion) or len(result.relevantes) != len(docs):
             raise ValueError("calificación con forma inesperada")
         return [doc for doc, ok in zip(docs, result.relevantes) if ok]
-    except Exception:
+    except Exception as exc:
+        circuit_breaker.mark_down(_HELPER_BREAKER_KEY, exc)
         logger.warning("relevance qualification failed, keeping all candidates", exc_info=True)
         return docs
 
