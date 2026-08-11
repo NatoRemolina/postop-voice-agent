@@ -137,6 +137,7 @@ function renderCalls(calls) {
   callsList.innerHTML = calls
     .map((c) => {
       const crit = badgeClass(c.criticidad_final);
+      const quien = [c.paciente, c.procedimiento].filter(Boolean).map(esc).join(" — ");
       return `
       <article class="call-card">
         <div class="call-head">
@@ -144,6 +145,7 @@ function renderCalls(calls) {
           <span class="badge ${crit}">${esc(c.criticidad_final || "verde")}</span>
           ${c.escalar ? '<span class="escalada">⚠ ESCALADA</span>' : ""}
         </div>
+        ${quien ? `<div class="call-quien">${quien}</div>` : ""}
         <div class="call-meta">${esc(formatDate(c.ts))} · ${esc(c.n_turnos ?? "?")} turnos</div>
         <p class="call-summary">${esc(c.resumen_narrativo || "Sin resumen disponible.")}</p>
         <button type="button" data-call-id="${esc(c.conversation_id)}">Ver detalle</button>
@@ -178,6 +180,39 @@ function renderTurn(t) {
     </div>`;
 }
 
+function renderSummary(id, s) {
+  if (!s) return "";
+  const crit = badgeClass(s.criticidad_final);
+  const sintomas = (s.sintomas_reportados || []).map(esc).join(", ") || "—";
+  const flags = (s.red_flags || []).map(esc).join(", ");
+  const refs = (s.referencias || [])
+    .map((r) => {
+      const page = r.page != null ? `, pág. ${esc(r.page)}` : "";
+      return `<li>${esc(r.source)}${page} <span class="muted">(${esc(r.scenario)})</span></li>`;
+    })
+    .join("");
+  return `
+    <section class="call-summary-card">
+      <div class="call-head">
+        <span class="badge ${crit}">${esc(s.criticidad_final || "verde")}</span>
+        ${s.escalar ? '<span class="escalada">⚠ ESCALADA AL EQUIPO CLÍNICO</span>' : ""}
+      </div>
+      <dl class="summary-grid">
+        <dt>Paciente</dt><dd>${esc(s.paciente || "no identificado")}</dd>
+        <dt>Procedimiento</dt><dd>${esc(s.procedimiento || "—")}</dd>
+        <dt>Síntomas reportados</dt><dd>${sintomas}</dd>
+        ${flags ? `<dt>Señales de alarma</dt><dd>${flags}</dd>` : ""}
+        <dt>Próximos pasos</dt><dd>${esc(s.proximos_pasos || "—")}</dd>
+      </dl>
+      <p class="call-summary-narrativa">${esc(s.resumen_narrativo || "Sin resumen disponible.")}</p>
+      ${refs ? `<details class="turn-refs"><summary>Referencias citadas en la llamada</summary><ul>${refs}</ul></details>` : ""}
+      <div class="dialog-actions">
+        <button type="button" data-regen-id="${esc(id)}">Regenerar resumen</button>
+        <button type="button" class="btn-danger" data-delete-id="${esc(id)}">Eliminar registro</button>
+      </div>
+    </section>`;
+}
+
 async function showCallDetail(id) {
   dialogTitle.textContent = `Detalle de llamada ${shortId(id)}`;
   dialogBody.innerHTML = '<p class="muted">Cargando…</p>';
@@ -191,11 +226,11 @@ async function showCallDetail(id) {
     }
     const data = await res.json();
     const turns = data.turns || data.turnos || [];
-    if (turns.length === 0) {
-      dialogBody.innerHTML = '<p class="muted">Sin turnos registrados.</p>';
-      return;
-    }
-    dialogBody.innerHTML = turns.map(renderTurn).join("");
+    const summaryHtml = renderSummary(id, data.summary || data.resumen);
+    const turnsHtml = turns.length
+      ? `<h4 class="turns-heading">Transcripción</h4>${turns.map(renderTurn).join("")}`
+      : '<p class="muted">Sin turnos registrados.</p>';
+    dialogBody.innerHTML = summaryHtml + turnsHtml;
   } catch (err) {
     dialogBody.innerHTML = '<p class="error">Error de red al cargar el detalle.</p>';
   }
@@ -204,6 +239,52 @@ async function showCallDetail(id) {
 callsList.addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-call-id]");
   if (btn) showCallDetail(btn.dataset.callId);
+});
+
+dialogBody.addEventListener("click", async (ev) => {
+  const regenBtn = ev.target.closest("button[data-regen-id]");
+  if (regenBtn) {
+    const id = regenBtn.dataset.regenId;
+    regenBtn.disabled = true;
+    regenBtn.textContent = "Regenerando…";
+    try {
+      const res = await fetch(`/api/calls/${encodeURIComponent(id)}/summarize`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || "No se pudo regenerar el resumen.");
+      } else {
+        await showCallDetail(id);
+        loadCalls();
+        return;
+      }
+    } catch (err) {
+      alert("Error de red al regenerar el resumen.");
+    }
+    regenBtn.disabled = false;
+    regenBtn.textContent = "Regenerar resumen";
+    return;
+  }
+
+  const delBtn = ev.target.closest("button[data-delete-id]");
+  if (delBtn) {
+    const id = delBtn.dataset.deleteId;
+    if (!confirm(`¿Eliminar TODO el registro de la llamada "${shortId(id)}"? Esta acción no se puede deshacer.`)) return;
+    delBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/calls/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || "No se pudo eliminar el registro.");
+        delBtn.disabled = false;
+        return;
+      }
+      callDialog.close();
+      loadCalls();
+    } catch (err) {
+      alert("Error de red al eliminar el registro.");
+      delBtn.disabled = false;
+    }
+  }
 });
 
 document.getElementById("dialog-close").addEventListener("click", () => {

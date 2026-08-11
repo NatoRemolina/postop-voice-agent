@@ -307,6 +307,54 @@ dialog::backdrop {
   color: #6a7180;
 }
 
+.call-quien {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #2b3140;
+}
+
+.call-summary-card {
+  border: 1px solid #e3e6ea;
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  background: #fafbfc;
+  margin-bottom: 1rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.9rem;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.summary-grid dt {
+  color: #6a7180;
+  font-weight: 600;
+}
+
+.summary-grid dd {
+  margin: 0;
+}
+
+.call-summary-narrativa {
+  font-size: 0.93rem;
+  margin: 0.5rem 0;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.turns-heading {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.95rem;
+  color: #4a5262;
+}
+
 .error {
   color: #c0392b;
   font-weight: 600;

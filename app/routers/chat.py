@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -10,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from app.agent.llm import TurnUsage, stream_response
 from app.agent.prompts import DEFAULT_PATIENT_CONTEXT, SYSTEM_PROMPT, format_rag_context
 from app.agent.scenario import detect_scenario
+from app.agent.summary import build_call_summary, persist_summary
 from app.config import settings
 from app.rag.retrieve import retrieve
 from app.storage import append_jsonl
@@ -37,6 +39,20 @@ def _chunk_payload(chat_id: str, created: int, content: str | None, finish: str 
 
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+async def _auto_summarize(conversation_id: str) -> None:
+    """Se dispara en background (nunca bloquea el SSE) cuando el propio modelo
+    marca fin_llamada=true. Cubre el caso donde el webhook de ElevenLabs no
+    llega (red, timing) — sin esto, esa llamada se quedaba sin resumen hasta
+    que alguien lo pidiera manualmente. Idempotente con el webhook: ambos
+    caminos llaman a la misma persist_summary, y `latest_summaries` siempre
+    toma el más reciente."""
+    try:
+        summary = await build_call_summary(conversation_id)
+        persist_summary(summary)
+    except Exception:
+        logger.exception("auto-resumen falló para %s", conversation_id)
 
 
 def _build_rag_query(history: list[dict]) -> str:
@@ -199,5 +215,8 @@ async def chat_completions(request: Request):
                 **record_extra,
             },
         )
+
+        if control and control.get("fin_llamada"):
+            asyncio.create_task(_auto_summarize(conversation_id))
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
