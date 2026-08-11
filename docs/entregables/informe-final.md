@@ -73,7 +73,8 @@ la API de ElevenLabs ("custom_llm generation failed"). El rediseño final:
 - Los ayudantes LLM del retrieval (reescritura de consulta coloquial →
   clínica, calificación de relevancia) solo corren fuera del camino crítico.
 
-Resultado medido: **P50 de 1,07 s al primer token** (métricas §5 del README,
+Resultado medido: **P50 de 1,42 s al primer token** sobre todo el histórico y
+**0,99 s** sobre los 50 turnos del diseño final (métricas §5 del README,
 verificables en logs).
 
 ### Decisión 3 — RAG híbrido con citas como unidad básica

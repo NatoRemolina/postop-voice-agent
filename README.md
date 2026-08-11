@@ -123,6 +123,27 @@ Consola /admin ── conocimiento vivo: subir PDF → indexado en caliente → 
 Resumen por llamada ── paciente, síntomas, decisión, referencias, próximos pasos
 ```
 
+### Detalles de la capa de voz
+
+- **Voz fija: Marcela, acento colombiano** (`eleven_flash_v2_5`). Se retiró el
+  selector de voces: el paciente objetivo es colombiano y una sola voz hace la
+  demo reproducible.
+- **Pausa profesional antes de preguntar.** El agente emite
+  `<break time="0.3s" />` justo antes de la frase que pregunta, nunca al inicio
+  ni en un cierre. Medido: cuesta +0,57 s de audio. Se verificó que los puntos
+  suspensivos **no** producen silencio en este modelo (misma duración exacta),
+  por eso se usa el tag y no puntuación. El marcado se elimina del texto que se
+  guarda en los registros, y `VOICE_PAUSES_ENABLED=false` lo desactiva sin
+  redesplegar.
+- **Botón de silenciar** en la vista de llamada: baja el volumen del agente sin
+  cortar la sesión ni cerrar el micrófono.
+- **Citas con relevancia auditable.** Cada fuente registrada lleva su similitud
+  semántica real con la consulta y un **rango de páginas** (un fragmento suele
+  cruzar el salto de página; citar solo la inicial hacía que la frase no
+  apareciera donde se decía). Solo se cita lo que supera el umbral de
+  relevancia: ante una pregunta clínica fuera del corpus el agente no cita
+  nada y declara su límite.
+
 Detalle completo: [docs/arquitectura/agentic-rag.md](docs/arquitectura/agentic-rag.md) ·
 [docs/arquitectura/etl.md](docs/arquitectura/etl.md) ·
 [docs/analisis/dataset-eda.md](docs/analisis/dataset-eda.md) ·
@@ -171,7 +192,7 @@ el ASR y el TTS de ElevenLabs, fuera de nuestra medición del servidor.
 
 *\*El generador se invoca **una vez por turno** en el camino nominal. La media
 incluye los reintentos completos de la cascada cuando un proveedor agota su
-cuota gratuita (23 de 218 turnos usaron respaldo) y los ayudantes de reescritura
+cuota gratuita (13 de 218 turnos se resolvieron con un modelo de respaldo) y los ayudantes de reescritura
 y calificación de pasajes, que corren fuera del camino crítico de la voz.*
 
 **Qué modelo respondió realmente** (registrado turno a turno, no declarado):
