@@ -67,6 +67,11 @@ def make_tools(scenario: str | None, turn_state: dict) -> list:
                 else getattr(chunk, "source", "desconocido")
             )
             page = chunk.get("page", 0) if isinstance(chunk, dict) else getattr(chunk, "page", 0)
+            page_end = (
+                chunk.get("page_end") if isinstance(chunk, dict)
+                else getattr(chunk, "page_end", None)
+            ) or page
+            cita_pag = f"pág {page}" if page_end == page else f"págs {page}-{page_end}"
             score = chunk.get("score") if isinstance(chunk, dict) else getattr(chunk, "score", None)
             relevancia = (
                 chunk.get("relevancia") if isinstance(chunk, dict)
@@ -74,9 +79,9 @@ def make_tools(scenario: str | None, turn_state: dict) -> list:
             )
             sources.append(
                 {"source": source, "scenario": scenario, "page": page,
-                 "score": score, "relevancia": relevancia}
+                 "page_end": page_end, "score": score, "relevancia": relevancia}
             )
-            lines.append(f"[Fuente: {source}, pág {page}] {text}")
+            lines.append(f"[Fuente: {source}, {cita_pag}] {text}")
         return "\n\n".join(lines)
 
     @tool

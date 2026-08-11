@@ -249,8 +249,12 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
         return "(no disponible en este turno)", []
     if not chunks:
         return "(sin resultados relevantes en el corpus para este turno)", []
+    def _cita_pagina(c: dict) -> str:
+        ini, fin = c.get("page", 0), c.get("page_end") or c.get("page", 0)
+        return f"pág {ini}" if fin in (None, ini) else f"págs {ini}-{fin}"
+
     lines = [
-        f"[{c.get('source', 'desconocido')}, pág {c.get('page', 0)}] {c.get('text', '')}"
+        f"[{c.get('source', 'desconocido')}, {_cita_pagina(c)}] {c.get('text', '')}"
         for c in chunks
     ]
     sources = [
@@ -258,6 +262,7 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
             "source": c.get("source"),
             "scenario": c.get("scenario"),
             "page": c.get("page"),
+            "page_end": c.get("page_end"),
             "score": c.get("score"),
             # Similitud real del pasaje con la consulta: es el número que hace
             # auditable la cita (el "score" es solo la posición en el ranking).

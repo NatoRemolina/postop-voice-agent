@@ -252,6 +252,9 @@ def _to_result(doc: Document, rank: int, total: int) -> dict:
         "source": meta.get("source", "desconocido"),
         "scenario": meta.get("scenario", "desconocido"),
         "page": meta.get("page", 0),
+        # Un fragmento suele cruzar el salto de página; se cita el rango para
+        # que quien verifique la fuente encuentre la frase donde de verdad está.
+        "page_end": meta.get("page_end", meta.get("page", 0)),
         "score": round(score, 4),
     }
 

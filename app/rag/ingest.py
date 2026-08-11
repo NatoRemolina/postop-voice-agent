@@ -46,8 +46,16 @@ def extract_pdf_pages(path: Path) -> list[tuple[int, str]]:
     return pages
 
 
-def chunk_pages(pages: list[tuple[int, str]]) -> list[tuple[str, int]]:
-    """Splits page texts into overlapping chunks. Returns (chunk_text, first_page)."""
+def chunk_pages(pages: list[tuple[int, str]]) -> list[tuple[str, int, int]]:
+    """Divide el texto en fragmentos solapados.
+
+    Devuelve (texto, página_inicial, página_final). Se guardan AMBAS porque un
+    fragmento de 2.200 caracteres suele cruzar el salto de página: citando solo
+    la inicial, quien vaya a verificar la cita puede abrir esa página y no
+    encontrar la frase (comprobado en auditoría: la respuesta salía de la
+    página siguiente a la citada). La rúbrica exige que la referencia resista
+    una verificación contra la fuente real.
+    """
     size = settings.chunk_size_chars
     overlap = settings.chunk_overlap_chars
     full = ""
@@ -65,7 +73,7 @@ def chunk_pages(pages: list[tuple[int, str]]) -> list[tuple[str, int]]:
                 break
         return page
 
-    chunks: list[tuple[str, int]] = []
+    chunks: list[tuple[str, int, int]] = []
     pos = 0
     while pos < len(full):
         end = min(pos + size, len(full))
@@ -76,7 +84,7 @@ def chunk_pages(pages: list[tuple[int, str]]) -> list[tuple[str, int]]:
                 end = pos + cut + 1
         chunk = full[pos:end].strip()
         if len(chunk) > 80:
-            chunks.append((chunk, page_for_offset(pos)))
+            chunks.append((chunk, page_for_offset(pos), page_for_offset(max(pos, end - 1))))
         if end >= len(full):
             break
         pos = max(end - overlap, pos + 1)
@@ -113,9 +121,10 @@ def ingest_pdf(path: Path, scenario: str, uploaded: bool = False) -> IngestResul
                     "source": source_name,
                     "scenario": scenario,
                     "page": page,
+                    "page_end": page_end,
                     "uploaded": uploaded,
                 }
-                for _, page in part
+                for _, page, page_end in part
             ],
         )
     return IngestResult(doc_id, source_name, scenario, len(chunks), n_chars)
