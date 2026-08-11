@@ -236,9 +236,14 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
     if not last_user.strip():
         return "(sin consulta clínica en este turno)", []
     try:
-        from app.graph.retrieval import search
+        from app.graph.retrieval import search, sustentan_la_respuesta
 
-        chunks = search(last_user, scenario, top_k=3, fast=True)
+        # Solo los pasajes con relevancia semántica real: la fusión por ranking
+        # siempre devuelve k resultados, aunque el mejor sea la portada del PDF.
+        # Citar esos como fuente rompe el requisito de que la referencia
+        # "resista una verificación contra la fuente real" (auditado: 3 de 4
+        # páginas citadas no contenían nada relacionado con la respuesta).
+        chunks = sustentan_la_respuesta(search(last_user, scenario, top_k=3, fast=True))
     except Exception:
         logger.warning("prefetch de contexto clínico falló", exc_info=True)
         return "(no disponible en este turno)", []

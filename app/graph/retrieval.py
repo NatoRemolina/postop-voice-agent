@@ -243,6 +243,9 @@ def _to_result(doc: Document, rank: int, total: int) -> dict:
     meta = doc.metadata or {}
     # EnsembleRetriever no expone un score numérico de fusión; se aproxima con
     # la posición en el ranking final (1.0 = mejor, decreciente y lineal).
+    # OJO: esto es POSICIÓN, no relevancia — el primer resultado saca 1.0
+    # aunque sea la portada del documento. La relevancia real va aparte, en
+    # "relevancia" (ver _añadir_relevancia).
     score = 1.0 - (rank / total if total else 0.0)
     return {
         "text": doc.page_content,
@@ -251,6 +254,63 @@ def _to_result(doc: Document, rank: int, total: int) -> dict:
         "page": meta.get("page", 0),
         "score": round(score, 4),
     }
+
+
+# Umbral de similitud coseno para considerar que un pasaje SUSTENTA la
+# respuesta y merece citarse. Calibrado con medidas reales sobre este corpus y
+# este modelo de embeddings (las similitudes se agrupan en una banda estrecha,
+# así que el número no es transferible a otro modelo):
+#
+#   citas malas detectadas en auditoría    0.27 – 0.40
+#     (portada del PDF, abstract de un paper epidemiológico)
+#   consulta cuyo tema NO está en el corpus 0.36 – 0.43
+#   pasajes que sí sustentan la respuesta   0.44 – 0.54
+#
+# El corte va en el hueco entre 0.43 y 0.44. Es deliberadamente conservador: la
+# rúbrica exige que la referencia "resista una verificación contra la fuente
+# real", y prefiere que el agente declare su límite antes que citar de más.
+_UMBRAL_RELEVANCIA = 0.44
+
+
+def _relevancia_real(query: str, results: list[dict]) -> list[dict]:
+    """Añade a cada resultado su similitud coseno real contra la consulta.
+
+    Se calcula con el mismo modelo de embeddings ya cargado en memoria (no hay
+    llamada de red ni al LLM), así que es viable en el camino crítico de voz.
+    Ante cualquier fallo devuelve los resultados intactos: perder la anotación
+    de relevancia nunca debe costar una respuesta al paciente.
+    """
+    if not results:
+        return results
+    try:
+        from app.rag.store import embed_passages, embed_query
+
+        q = embed_query(query)
+        vecs = embed_passages([r["text"] for r in results])
+
+        def coseno(a, b):
+            num = sum(x * y for x, y in zip(a, b))
+            na = sum(x * x for x in a) ** 0.5
+            nb = sum(y * y for y in b) ** 0.5
+            return num / (na * nb) if na and nb else 0.0
+
+        for r, v in zip(results, vecs):
+            r["relevancia"] = round(coseno(q, v), 4)
+    except Exception:
+        logger.warning("no se pudo calcular la relevancia real", exc_info=True)
+    return results
+
+
+def sustentan_la_respuesta(results: list[dict]) -> list[dict]:
+    """Los pasajes citables: los que superan el umbral de relevancia real.
+
+    Si ninguno lo supera devuelve lista vacía — es la respuesta correcta: el
+    corpus no cubre esa consulta y el agente debe decirlo, no citar cualquier
+    cosa. Si la relevancia no se pudo calcular, no se filtra nada."""
+    con_relevancia = [r for r in results if "relevancia" in r]
+    if not con_relevancia:
+        return results
+    return [r for r in con_relevancia if r["relevancia"] >= _UMBRAL_RELEVANCIA]
 
 
 def search_diagnostics(
@@ -367,7 +427,9 @@ def search_diagnostics(
 
     filtered = _dedup_docs(filtered)[:top_k]
     total = len(filtered)
-    diag["resultados"] = [_to_result(doc, i, total) for i, doc in enumerate(filtered)]
+    diag["resultados"] = _relevancia_real(
+        query, [_to_result(doc, i, total) for i, doc in enumerate(filtered)]
+    )
     diag["total_ms"] = round((time.perf_counter() - t_start) * 1000, 1)
     return diag
 
