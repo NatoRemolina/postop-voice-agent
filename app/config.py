@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # en mlflow_data/, igual filosofía que ChromaDB/SQLite). Si mlflow no está
     # instalado o falla al inicializar, el sistema sigue funcionando idéntico
     # con solo un warning — nunca bloquea una llamada de voz.
+    # Pausas prosódicas `<break time="0.5s" />` en el texto hablado. Solo las
+    # entiende la familia v2 de ElevenLabs (el agente usa eleven_flash_v2_5,
+    # verificado). En false se eliminan del stream antes de llegar a la voz —
+    # interruptor de emergencia si alguna vez el TTS las leyera en voz alta.
+    voice_pauses_enabled: bool = True
+
     mlflow_enabled: bool = True
     # Apunta a un `mlflow server` real corriendo aparte (ver
     # requirements-mlflow-ui.txt): el cliente ligero (mlflow-tracing) NO sabe

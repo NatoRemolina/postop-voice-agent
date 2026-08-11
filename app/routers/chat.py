@@ -24,6 +24,10 @@ router = APIRouter()
 
 CONTROL_RE = re.compile(r"<control>(.*?)</control>", re.DOTALL)
 CONTROL_TAG = "<control>"
+# Pausas prosódicas que el modelo escribe para el TTS. Verificado contra
+# eleven_flash_v2_5: el tag se respeta (+1.15 s reales al pedir 1.5 s) mientras
+# que los puntos suspensivos NO añaden silencio, solo cambian la entonación.
+BREAK_RE = re.compile(r'<break\s+time="[^"]*"\s*/>')
 
 
 def _chunk_payload(chat_id: str, created: int, content: str | None, finish: str | None):
@@ -39,6 +43,23 @@ def _chunk_payload(chat_id: str, created: int, content: str | None, finish: str 
 
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _strip_breaks(text: str) -> str:
+    """Quita los tags de pausa sin dejar el doble espacio del hueco."""
+    return re.sub(r"[ \t]{2,}", " ", BREAK_RE.sub(" ", text))
+
+
+def _for_tts(text: str) -> str:
+    """Interruptor de emergencia para las pausas prosódicas. El tag `<break/>`
+    solo lo entienden los modelos de la familia v2 (el agente usa
+    eleven_flash_v2_5); si alguna vez la capa de voz cambiara de modelo o
+    dejara de interpretarlo, el tag se leería EN VOZ ALTA al paciente. Con
+    VOICE_PAUSES_ENABLED=false se eliminan del stream sin tocar el prompt ni
+    redesplegar lógica."""
+    if settings.voice_pauses_enabled:
+        return text
+    return _strip_breaks(text)
 
 
 async def _auto_summarize(conversation_id: str) -> None:
@@ -142,9 +163,18 @@ async def chat_completions(request: Request):
                         break
                 emit = held[: len(held) - keep] if keep else held
                 held = held[len(held) - keep :] if keep else ""
+                # Un <break .../> partido entre dos chunks SSE llegaría roto al
+                # TTS y se leería en voz alta. Si queda un "<" sin su ">", se
+                # retiene hasta completarse (al cerrar el turno se vacía igual).
+                lt = emit.rfind("<")
+                if lt != -1 and ">" not in emit[lt:]:
+                    held = emit[lt:] + held
+                    emit = emit[:lt]
                 if emit:
                     spoken_parts.append(emit)
-                    yield _sse(_chunk_payload(chat_id, created, emit, None))
+                    yield _sse(
+                        _chunk_payload(chat_id, created, _for_tts(emit), None)
+                    )
         except Exception:
             logger.exception("gemini stream failed")
             fallback = (
@@ -156,7 +186,7 @@ async def chat_completions(request: Request):
 
         if held:
             spoken_parts.append(held)
-            yield _sse(_chunk_payload(chat_id, created, held, None))
+            yield _sse(_chunk_payload(chat_id, created, _for_tts(held), None))
 
         yield _sse(_chunk_payload(chat_id, created, None, "stop"))
         yield "data: [DONE]\n\n"
@@ -200,7 +230,10 @@ async def chat_completions(request: Request):
                 "rag_query": rag_query,
                 "rag_scenario": scenario,
                 "rag_sources": rag_sources,
-                "spoken_text": "".join(spoken_parts).strip(),
+                # Sin los tags de pausa: lo que se dijo es la frase, no el
+                # marcado prosódico (mantiene limpias las transcripciones que
+                # lee el jurado, la consola y el arnés de evaluación).
+                "spoken_text": _strip_breaks("".join(spoken_parts)).strip(),
                 "control": control,
                 "latency_first_token_ms": round(
                     ((t_first_token or t_end) - t_start) * 1000
