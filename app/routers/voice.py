@@ -16,7 +16,14 @@ ELEVENLABS_VOICES = "https://api.elevenlabs.io/v1/voices"
 
 @router.get("/api/voice/voices")
 async def list_spanish_voices():
-    """Voces en español de la cuenta, para el selector de acento de la llamada."""
+    """Voces en español disponibles en la cuenta.
+
+    La interfaz de llamada ya NO ofrece selector: la voz está fijada a Marcela
+    (acento colombiano) en la configuración del agente en ElevenLabs, porque el
+    paciente objetivo es colombiano y una sola voz hace la demo reproducible.
+    El endpoint se conserva para la consola/frontend externo, que sí permite
+    revisar el catálogo antes de cambiar la voz del agente.
+    """
     if not settings.elevenlabs_api_key:
         raise HTTPException(
             status_code=503, detail="Falta configurar ELEVENLABS_API_KEY en .env"
