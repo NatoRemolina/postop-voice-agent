@@ -46,7 +46,14 @@ function showError(message) {
   errorEl.hidden = !message;
 }
 
+// El marcado de pausa viaja hasta el TTS a propósito, pero ElevenLabs lo
+// devuelve tal cual en la transcripción: sin esto, el paciente (y el jurado)
+// leen «<break time="0.3s" />» en pantalla.
+const BREAK_TAG = /<break\s+time="[^"]*"\s*\/>/g;
+
 function addBubble(source, text) {
+  if (!text) return;
+  text = text.replace(BREAK_TAG, " ").replace(/[ \t]{2,}/g, " ").trim();
   if (!text) return;
   const empty = document.getElementById("transcript-empty");
   if (empty) empty.remove();

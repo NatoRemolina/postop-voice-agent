@@ -188,9 +188,9 @@ async def chat_completions(request: Request):
             spoken_parts.append(held)
             yield _sse(_chunk_payload(chat_id, created, _for_tts(held), None))
 
-        yield _sse(_chunk_payload(chat_id, created, None, "stop"))
-        yield "data: [DONE]\n\n"
-
+        # El bloque de control se parsea ANTES de cerrar el stream: si el modelo
+        # marcó fin_llamada hay que pedirle a ElevenLabs que cuelgue en el mismo
+        # turno, y eso viaja como tool call en el cierre.
         control = None
         if control_buf:
             m = CONTROL_RE.search(control_buf)
@@ -199,6 +199,34 @@ async def chat_completions(request: Request):
                     control = json.loads(m.group(1))
                 except json.JSONDecodeError:
                     logger.warning("unparseable control block: %s", m.group(1)[:200])
+
+        # Colgar en cuanto el agente se despide. `end_call` es una herramienta
+        # nativa de ElevenLabs (activada en la config del agente): se le pide
+        # como tool call en formato OpenAI y la plataforma cierra la llamada.
+        # Se emite desde aquí, no desde el modelo, porque el fin de llamada ya
+        # está decidido en el bloque de control y así no depende de que el LLM
+        # acierte a invocar la herramienta.
+        if control and control.get("fin_llamada"):
+            yield _sse({
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": usage.model_used or settings.gemini_model,
+                "choices": [{
+                    "index": 0,
+                    "delta": {"tool_calls": [{
+                        "index": 0,
+                        "id": f"call_{chat_id[-8:]}",
+                        "type": "function",
+                        "function": {"name": "end_call", "arguments": "{}"},
+                    }]},
+                    "finish_reason": None,
+                }],
+            })
+            yield _sse(_chunk_payload(chat_id, created, None, "tool_calls"))
+        else:
+            yield _sse(_chunk_payload(chat_id, created, None, "stop"))
+        yield "data: [DONE]\n\n"
 
         t_end = time.perf_counter()
         if settings.agentic_rag_enabled:
