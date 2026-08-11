@@ -137,6 +137,16 @@ Resumen por llamada ── paciente, síntomas, decisión, referencias, próximo
   redesplegar.
 - **Botón de silenciar** en la vista de llamada: baja el volumen del agente sin
   cortar la sesión ni cerrar el micrófono.
+- **Qué pasa en los silencios**: si el paciente lleva 7 s sin hablar, el agente
+  dice una frase de espera en español, variando entre varias («¿Sigue ahí?
+  Tómese su tiempo, no hay prisa.» / «Sigo en la línea, cuando quiera me
+  cuenta.»), como máximo una vez por turno para no atosigar. Antes de esto el
+  relleno configurado era `"Hhmmmm...yeah."`, en inglés.
+- **La configuración de la capa de voz está versionada** en
+  [config/elevenlabs-agent.json](config/elevenlabs-agent.json): modelo TTS, voz,
+  detección de turnos, manejo de interrupciones, ASR y silencios. Sin eso, el
+  comportamiento conversacional vivía solo en una consola web y no era
+  reproducible ni auditable.
 - **Citas con relevancia auditable.** Cada fuente registrada lleva su similitud
   semántica real con la consulta y un **rango de páginas** (un fragmento suele
   cruzar el salto de página; citar solo la inicial hacía que la frase no
@@ -160,11 +170,20 @@ desarrollo y evaluación). **Verificables en vivo por el jurado en cualquier
 momento**, sin credenciales:
 
 ```bash
-curl -s https://52-207-194-196.sslip.io/api/metrics
+curl -s https://52-207-194-196.sslip.io/api/metrics   # las métricas agregadas
+curl -s "https://52-207-194-196.sslip.io/api/turns?limit=20"  # el log crudo que las sustenta
 ```
 
-Ese endpoint las recalcula sobre el log real, así que lo que aparece abajo
-coincide por construcción con lo que el jurado vea en la sesión.
+`/api/metrics` recalcula sobre el log real en cada consulta. `/api/turns`
+expone ese mismo log turno a turno (latencia, tokens, qué modelo respondió de
+verdad, fuentes citadas con su relevancia y la decisión), para que las cifras
+publicadas no haya que creerlas: se comprueban. El texto de la conversación se
+omite ahí por minimización de datos; el detalle clínico de una llamada concreta
+está en `/api/calls/{id}`.
+
+**Las cifras de abajo son la foto del momento en que se escribieron.** Cada
+llamada nueva mueve los agregados, así que si el jurado consulta el endpoint
+verá números cercanos pero no idénticos: la fuente de verdad es el endpoint.
 
 ### Latencia (medida en el servidor: de recibir la petición de ElevenLabs al primer token / respuesta completa)
 
@@ -185,10 +204,17 @@ el ASR y el TTS de ElevenLabs, fuera de nuestra medición del servidor.
 
 | Métrica | P50 | Media |
 |---|---|---|
-| Tokens de entrada por turno | 3.161 | 3.725 |
-| Tokens de salida por turno | 114 | 120 |
+| Tokens de entrada **por turno** | 3.161 | 3.725 |
+| Tokens de salida **por turno** | 114 | 120 |
+| Tokens de entrada **por llamada** | 3.691 | 5.884 |
+| Tokens de salida **por llamada** | 130 | 189 |
 | Invocaciones al modelo por turno | — | 6,93* |
 | Consultas RAG por llamada | — | 1,58 |
+
+*Nota sobre "por llamada": el log acumula muchas conversaciones de prueba de un
+solo turno (curl de verificación), así que la media por llamada está sesgada
+hacia abajo respecto a una llamada real completa, que ronda los 6-8 turnos. Se
+reporta tal cual sale del log en vez de filtrar a conveniencia.*
 
 *\*El generador se invoca **una vez por turno** en el camino nominal. La media
 incluye los reintentos completos de la cascada cuando un proveedor agota su
