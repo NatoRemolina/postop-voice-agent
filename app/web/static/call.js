@@ -5,6 +5,7 @@ const statusEl = document.getElementById("call-status");
 const transcriptEl = document.getElementById("transcript");
 const errorEl = document.getElementById("call-error");
 const voiceSelect = document.getElementById("voice-select");
+const muteBtn = document.getElementById("mute-btn");
 
 async function loadVoices() {
   try {
@@ -32,6 +33,21 @@ const STATUS_LABELS = {
 
 let conversation = null;
 let starting = false;
+let muted = false;
+
+/** Silencia solo la salida de voz: el micrófono sigue abierto y el agente
+ * sigue escuchando, así la llamada no se interrumpe al silenciar. */
+function applyMute(next) {
+  muted = next;
+  muteBtn.textContent = muted ? "🔇 Activar sonido" : "🔊 Silenciar";
+  muteBtn.setAttribute("aria-pressed", String(muted));
+  if (!conversation) return;
+  try {
+    conversation.setVolume({ volume: muted ? 0 : 1 });
+  } catch (_) {
+    /* si el SDK aún no expone setVolume, el botón no rompe la llamada */
+  }
+}
 
 function setStatus(state) {
   statusEl.textContent = STATUS_LABELS[state];
@@ -71,6 +87,8 @@ function handleDisconnect() {
   conversation = null;
   setStatus("disconnected");
   setButton(false);
+  muteBtn.disabled = true;
+  applyMute(false);  // la próxima llamada arranca siempre con sonido
   try {
     const conversationId = conv && conv.getId ? conv.getId() : null;
     if (conversationId) {
@@ -112,6 +130,8 @@ async function startCall() {
       onConnect: () => {
         setStatus("listening");
         setButton(true);
+        muteBtn.disabled = false;
+        applyMute(muted);  // respeta el estado si se pulsó antes de conectar
       },
       onDisconnect: () => {
         handleDisconnect();
@@ -153,6 +173,8 @@ async function endCall() {
   callBtn.disabled = false;
   if (conversation) handleDisconnect();
 }
+
+muteBtn.addEventListener("click", () => applyMute(!muted));
 
 callBtn.addEventListener("click", () => {
   if (starting) return;

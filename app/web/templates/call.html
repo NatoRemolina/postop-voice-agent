@@ -7,6 +7,10 @@
 
   <div class="call-controls">
     <button id="call-btn" class="call-btn" type="button">📞 Iniciar llamada</button>
+    <button id="mute-btn" class="mute-btn" type="button" disabled aria-pressed="false"
+            title="Silencia la voz del agente; la llamada sigue activa y él sigue escuchando">
+      🔊 Silenciar
+    </button>
     <label for="voice-select" class="voice-label">Voz / acento:</label>
     <select id="voice-select" class="voice-select">
       <option value="">Predeterminada (Ana María)</option>
@@ -33,6 +37,12 @@
   }
   .call-btn.in-call { background: #c0392b; }
   .call-btn:disabled { opacity: 0.6; cursor: wait; }
+  .mute-btn {
+    font-size: 0.95rem; padding: 0.6rem 1.1rem; border-radius: 999px;
+    border: 1px solid #ccc; background: #fff; color: #333; cursor: pointer;
+  }
+  .mute-btn[aria-pressed="true"] { background: #4a4a4a; color: #fff; border-color: #4a4a4a; }
+  .mute-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .call-status { font-weight: 600; }
   .call-status[data-state="disconnected"] { color: #777; }
   .call-status[data-state="connecting"] { color: #b9770e; }
