@@ -1,0 +1,97 @@
+{
+ "base": "https://52-207-194-196.sslip.io",
+ "ts": 1786419519,
+ "nota": "Re-corrida de los dos casos rojo que originalmente fallaron, DESPUES del guardrail de acumulacion",
+ "resultados": [
+  {
+   "caso_id": "caso_tray_pac_42_00030_7",
+   "conversation_id": "eval_caso_tray_pac_42_00030_7_1786419519",
+   "esperado": "rojo",
+   "predicho": "rojo",
+   "escalo": true,
+   "modelos": [
+    "gemini-3.6-flash"
+   ],
+   "latencias_s": [
+    10.12,
+    11.19,
+    6.98,
+    7.89,
+    2.88,
+    7.27
+   ],
+   "transcript": [
+    {
+     "paciente": "Ay pues... más o menos, ahí normal, como uno se siente después de esas cosas. ¿Usted qué comió hoy?",
+     "agente": "Buenas tardes. Habla Clara, de seguimiento postoperatorio. <break time=\"0.3s\" /> Para acompañarlo bien hoy, ¿me confirma su nombre, qué cirugía le realizaron y hace cuántos días?"
+    },
+    {
+     "paciente": "Uy, no sé, no le he puesto mucha atención a eso... he estado como acalorada un poco pero no sé si eso cuenta. ¿Usted cree que eso es normal por el clima de aquí?",
+     "agente": "Es muy importante revisar la temperatura para estar seguros. <break time=\"0.3s\" /> ¿Tiene un termómetro a la mano para medírsela en este momento?"
+    },
+    {
+     "paciente": "Ah sí, ahí camino normal, sin problema... oiga, ¿y usted hace mucho este trabajo de las llamadas?",
+     "agente": "Me alegra que se pueda mover bien. Para cuidar su salud, la sensación de calor no depende del clima. <break time=\"0.3s\" /> ¿Logró medirse la temperatura con el termómetro?"
+    },
+    {
+     "paciente": "Pues no sé, la he visto como un poquito rosadita ahí en un lado, pero nada grave, creo... ¿eso es lo que preguntaba o quería otra cosa?",
+     "agente": "Ese colorcito rosado en la herida debemos vigilarlo bien. <break time=\"0.3s\" /> Además del tono rosado, ¿ha notado si le sale alguna secreción, líquido o mal olor por la herida?"
+    },
+    {
+     "paciente": "Ay, no sé, como que no me provoca mucho comer últimamente... pero bueno, uno con el estrés a veces no come bien, ¿no? ¿Usted cree que eso influye?",
+     "agente": "El apetito baja con el estrés, pero debemos vigilarlo. <break time=\"0.3s\" /> En una escala de cero a diez, siendo diez el peor dolor, ¿cuánto dolor está sintiendo ahora?"
+    },
+    {
+     "paciente": "Pues... no muy bien la verdad, me despierto varias veces, pero no sé, será que estoy nerviosa no más. ¿Ya casi terminamos? Es que me da como pereza hablar de esto.",
+     "agente": "Ya casi terminamos, entiendo su fatiga. Como tiene sensación de calor, la herida rosada, poco apetito y mal sueño, voy a pasar su caso inmediatamente al equipo clínico para que la evalúen."
+    }
+   ],
+   "veredicto": "ACIERTO"
+  },
+  {
+   "caso_id": "caso_tray_pac_42_00017_7",
+   "conversation_id": "eval_caso_tray_pac_42_00017_7_1786419519",
+   "esperado": "rojo",
+   "predicho": "rojo",
+   "escalo": true,
+   "modelos": [
+    "gemini-3.6-flash"
+   ],
+   "latencias_s": [
+    3.22,
+    6.8,
+    2.77,
+    7.4,
+    7.13,
+    3.1
+   ],
+   "transcript": [
+    {
+     "paciente": "Ay, no, tranquila doctora, un poquito molesto no más, nada del otro mundo, uno aguanta.",
+     "agente": "Entiendo, pero para asegurarme de que su recuperación vaya bien, necesito saber: en una escala de cero a diez, siendo diez un dolor insoportable, <break time=\"0.3s\" />¿cuánto le duele en este momento?"
+    },
+    {
+     "paciente": "Sí, me tomé la temperatura ayer, marcó como 37 y algo, nada de escalofríos ni cosas raras, tranquila.",
+     "agente": "Gracias por contarme. Para tener el dato exacto de hoy, <break time=\"0.3s\" />¿podría tomarse la temperatura con el termómetro en este momento y decirme cuánto le marca?"
+    },
+    {
+     "paciente": "Pues despacito, como es normal después de esto, pero me muevo, no crea que estoy tan mal.",
+     "agente": "Está bien. Y para revisar cómo va sanando, <break time=\"0.3s\" />¿cómo ve la herida hoy: nota enrojecimiento, alguna secreción o que esté botando líquido?"
+    },
+    {
+     "paciente": "Se ve un poquito rojita ahí en el borde, pero nada de esas cosas de pus ni nada raro, yo creo que es normal de la cicatrización, doctora.",
+     "agente": "Entiendo. Para completar la valoración, <break time=\"0.3s\" />¿cómo ha estado su apetito hoy y si ha sentido ganas de vomitar?"
+    },
+    {
+     "paciente": "Pues como poquito, se me ha quitado un poco las ganas, pero algo paso, no se preocupe, eso ya va a mejorar.",
+     "agente": "Veo varias señales juntas que debemos vigilar: la temperatura alterada, el enrojecimiento y la baja de apetito. <break time=\"0.3s\" />¿Cómo ha podido dormir estas últimas noches?"
+    },
+    {
+     "paciente": "Pues no muy bien que digamos, me despierto varias veces, pero uno ya sabe que después de una operación así es normal, no es nada grave.",
+     "agente": "Entiendo lo que me dice, pero como tenemos varias molestias acumuladas como el enrojecimiento, la fiebre y la falta de sueño, debo pasar su caso al equipo clínico para su seguridad. Lo contactarán pronto."
+    }
+   ],
+   "veredicto": "ACIERTO"
+  }
+ ]
+}

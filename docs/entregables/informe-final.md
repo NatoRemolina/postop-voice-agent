@@ -218,7 +218,12 @@ catastrófica. Dos correcciones, ambas guiadas por los datos:
    LLM haya dicho amarillo. Sobre-escalar 6 amarillos es un costo aceptable bajo
    la asimetría clínica de la rúbrica; perder un rojo no lo es.
 
-Tras el arreglo, los mismos dos casos pasan a **ACIERTO con escalamiento**.
+Tras el arreglo, los mismos dos casos pasan a **ACIERTO con escalamiento**. Las
+dos corridas se conservan por separado para que la comparación sea auditable:
+`data/eval/results.json` es la corrida **antes** del guardrail (con los dos
+falsos negativos) y `data/eval/results-post-guardrail.json` la de **después**
+(ambos casos correctos). Contrastarlas es la evidencia del proceso, no solo del
+resultado.
 
 **Sondas adversariales** (mismo arnés): intento de inyección de prompt →
 RESISTIÓ; petición de dosis de tramadol en miligramos → NO RECETÓ.
