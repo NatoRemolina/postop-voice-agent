@@ -134,45 +134,55 @@ Detalle completo: [docs/arquitectura/agentic-rag.md](docs/arquitectura/agentic-r
 ## Métricas (obligatorias — §5 de la rúbrica)
 
 Calculadas sobre los registros reales de `data/turns.jsonl` del servidor
-desplegado (41 turnos al corte del 9 de agosto; reproducibles con
-`.venv/bin/python -m scripts.report_metrics` y verificables turno a turno en el
-log). El endpoint `GET /api/metrics` las recalcula en vivo en cualquier momento.
+desplegado (**218 turnos acumulados** al 10 de agosto, incluidas las pruebas de
+desarrollo y evaluación). **Verificables en vivo por el jurado en cualquier
+momento**, sin credenciales:
+
+```bash
+curl -s https://52-207-194-196.sslip.io/api/metrics
+```
+
+Ese endpoint las recalcula sobre el log real, así que lo que aparece abajo
+coincide por construcción con lo que el jurado vea en la sesión.
 
 ### Latencia (medida en el servidor: de recibir la petición de ElevenLabs al primer token / respuesta completa)
 
 | Métrica | P50 | P95 | Media |
 |---|---|---|---|
-| Primer token | **1.066 ms** | 7.816 ms | 2.476 ms |
-| Respuesta completa | 1.128 ms | 8.015 ms | 2.779 ms |
+| Primer token | **1.412 ms** | 5.458 ms | 2.260 ms |
+| Respuesta completa | 1.999 ms | 5.936 ms | 2.879 ms |
 
-**Nota de honestidad**: el P95 refleja que estos 41 turnos incluyen las
-iteraciones de desarrollo, entre ellas una versión intermedia del agente que
-ejecutaba herramientas antes de hablar (4-7 s por turno). Tras el rediseño final
-(una sola invocación del modelo por turno + contexto RAG pre-inyectado), los
-turnos recientes miden **~1,1–1,7 s al primer token**, consistente con el P50.
-La latencia extremo a extremo que percibe el paciente agrega el ASR y TTS de
-ElevenLabs (fuera de nuestra medición del servidor).
+**Cómo leer estos números, con honestidad**: el histórico acumula todas las
+iteraciones de desarrollo, incluida una versión intermedia que ejecutaba
+herramientas *antes* de hablar (4–7 s por turno) y las corridas del arnés de
+evaluación con la cuota gratuita agotada, que disparan la cola alta. Medido solo
+sobre los **50 turnos más recientes** —ya con el diseño final— el primer token
+baja a **P50 992 ms / P95 3.601 ms**. La latencia que percibe el paciente añade
+el ASR y el TTS de ElevenLabs, fuera de nuestra medición del servidor.
 
 ### Consumo
 
 | Métrica | P50 | Media |
 |---|---|---|
-| Tokens de entrada por turno | 1.849 | 3.215 |
-| Tokens de salida por turno | 38 | 86 |
-| Invocaciones al modelo por turno | — | 3,78* |
-| Consultas RAG por llamada | — | 1,0 |
+| Tokens de entrada por turno | 3.161 | 3.725 |
+| Tokens de salida por turno | 114 | 120 |
+| Invocaciones al modelo por turno | — | 6,93* |
+| Consultas RAG por llamada | — | 1,58 |
 
-*\*Incluye las iteraciones de desarrollo con ayudantes LLM (reescritura y
-calificación de pasajes) que en el diseño final solo corren fuera del camino
-crítico de voz; en los turnos recientes es 1 invocación del generador por turno
-más los ayudantes cuando su cuota lo permite.*
+*\*El generador se invoca **una vez por turno** en el camino nominal. La media
+incluye los reintentos completos de la cascada cuando un proveedor agota su
+cuota gratuita (23 de 218 turnos usaron respaldo) y los ayudantes de reescritura
+y calificación de pasajes, que corren fuera del camino crítico de la voz.*
+
+**Qué modelo respondió realmente** (registrado turno a turno, no declarado):
+`gemini-3.6-flash` 205 turnos · `llama-3.3-70b-versatile` 8 · `llama-3.1-8b-instant` 5.
 
 ### Costo estimado por llamada
 
 | Métrica | Valor |
 |---|---|
-| Costo por llamada (P50) | **USD 0,0029** |
-| Costo por llamada (media) | USD 0,0055 |
+| Costo por llamada (P50) | **USD 0,0065** |
+| Costo por llamada (media) | USD 0,0102 |
 
 Supuestos: precios de lista de `gemini-3.6-flash` (USD 1,50 entrada / USD 7,50
 salida por millón de tokens); el reto corre en el nivel gratuito y el costo se
