@@ -259,6 +259,9 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
             "scenario": c.get("scenario"),
             "page": c.get("page"),
             "score": c.get("score"),
+            # Similitud real del pasaje con la consulta: es el número que hace
+            # auditable la cita (el "score" es solo la posición en el ranking).
+            "relevancia": c.get("relevancia"),
         }
         for c in chunks
     ]

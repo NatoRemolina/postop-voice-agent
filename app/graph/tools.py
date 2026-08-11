@@ -43,9 +43,12 @@ def make_tools(scenario: str | None, turn_state: dict) -> list:
             return BUDGET_EXCEEDED_MSG
 
         try:
-            from app.graph.retrieval import search
+            from app.graph.retrieval import search, sustentan_la_respuesta
 
-            chunks = search(consulta, scenario, top_k=4)
+            # Mismo criterio que el prefetch: solo se devuelve (y se cita) lo
+            # que de verdad sustenta la respuesta. La fusión por ranking
+            # siempre entrega k pasajes aunque ninguno venga al caso.
+            chunks = sustentan_la_respuesta(search(consulta, scenario, top_k=4))
         except Exception as exc:
             logger.warning("Fallo en búsqueda de conocimiento clínico: %s", exc)
             return "No se encontró información relevante en el corpus para esta consulta."
@@ -65,8 +68,13 @@ def make_tools(scenario: str | None, turn_state: dict) -> list:
             )
             page = chunk.get("page", 0) if isinstance(chunk, dict) else getattr(chunk, "page", 0)
             score = chunk.get("score") if isinstance(chunk, dict) else getattr(chunk, "score", None)
+            relevancia = (
+                chunk.get("relevancia") if isinstance(chunk, dict)
+                else getattr(chunk, "relevancia", None)
+            )
             sources.append(
-                {"source": source, "scenario": scenario, "page": page, "score": score}
+                {"source": source, "scenario": scenario, "page": page,
+                 "score": score, "relevancia": relevancia}
             )
             lines.append(f"[Fuente: {source}, pág {page}] {text}")
         return "\n\n".join(lines)
