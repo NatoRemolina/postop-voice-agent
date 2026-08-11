@@ -258,6 +258,58 @@ los proveedores de modelo); derecho de supresión implementado
 
 ## 7. Capturas del demo
 
-*(Espacio reservado — se adjuntan con la grabación del video: consola con el
-corpus cargado, subida de documento en caliente, llamada con transcript en vivo,
-alerta y resumen estructurado tras un caso rojo.)*
+Todas tomadas del servidor **en producción** (`https://52-207-194-196.sslip.io`),
+no de un entorno local: el jurado puede abrir las mismas URLs y ver lo mismo.
+
+### Consola de administración — corpus indexado
+
+![Consola de administración con el corpus clínico indexado](img/consola-admin.png)
+
+Los 106 documentos del corpus, con su escenario, número de fragmentos y estado.
+Cada fila se puede eliminar en caliente; al hacerlo el agente deja de conocer
+ese contenido de inmediato (compuerta G5).
+
+### Alerta activa tras un caso rojo real
+
+![Banner de alertas activas con las señales de alarma detectadas](img/alerta-y-llamadas.png)
+
+Banner generado por una llamada real de prueba: una paciente con fiebre de 39 °C,
+secreción purulenta y dolor 9/10. Las señales de alarma que se listan
+(`fiebre_alta`, `secrecion_purulenta`, `dolor_severo_incontrolable`,
+`movilidad_incapacitante`) las extrajo el agente durante la conversación, no
+están escritas a mano.
+
+Lo que el agente **le dijo a la paciente** en ese caso, textualmente:
+
+> «Doña Rosa, la fiebre tan alta y la secreción en su herida son señales de
+> alarma que debemos atender de inmediato. Voy a avisar ya mismo al equipo
+> clínico.»
+>
+> «Doña Rosa, ese dolor tan fuerte y no poder levantarse confirman que debe irse
+> ya mismo a urgencias. Por favor, pida ayuda a un familiar y diríjase a…»
+
+Y el resumen estructurado que quedó guardado **sin intervención manual** (ni
+webhook ni botón), consultable en `GET /api/calls/{id}`:
+
+| Campo | Valor |
+|---|---|
+| Paciente | Rosa Martinez |
+| Procedimiento | apendicectomía |
+| Criticidad final | **rojo** · escalado: sí |
+| Síntomas reportados | fiebre 39 °C · secreción purulenta y fétida en la herida · dolor severo 9/10 · movilidad severamente limitada |
+| Referencias citadas | 12 pasajes del corpus, con documento y página |
+| Próximos pasos | «El equipo clínico debe ser notificado de inmediato… Se le indicó a la paciente acudir sin demora al servicio de urgencias» |
+
+### Interfaz de llamada
+
+![Interfaz de llamada de voz](img/interfaz-llamada.png)
+
+Micrófono del navegador, transcripción en vivo, botón de silenciar (baja la voz
+del agente sin cortar la sesión) y voz fija de Marcela, acento colombiano.
+
+### Métricas verificables en vivo
+
+![Endpoint de métricas](img/metricas-api.png)
+
+`GET /api/metrics` recalcula sobre el log real en cada consulta, así que las
+cifras del README coinciden por construcción con lo que el jurado observe.
