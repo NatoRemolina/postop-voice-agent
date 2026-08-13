@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # interruptor de emergencia si alguna vez el TTS las leyera en voz alta.
     voice_pauses_enabled: bool = True
 
+    # Colgado automático al despedirse (herramienta end_call de ElevenLabs).
+    # Desactivado por defecto: en una demo grabada, que la plataforma cierre la
+    # llamada por su cuenta es un riesgo — quien graba prefiere colgar cuando
+    # decide. Se activa con AUTO_HANGUP_ENABLED=true.
+    auto_hangup_enabled: bool = False
+
     # Observabilidad: MLflow Tracing. Si el servidor de trazas no está corriendo
     # o mlflow no está instalado, el sistema funciona idéntico con un warning —
     # nunca bloquea una llamada de voz (ver el guardián en app/main.py).

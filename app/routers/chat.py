@@ -275,7 +275,7 @@ async def chat_completions(request: Request):
         # Se emite desde aquí, no desde el modelo, porque el fin de llamada ya
         # está decidido en el bloque de control y así no depende de que el LLM
         # acierte a invocar la herramienta.
-        if control and control.get("fin_llamada"):
+        if settings.auto_hangup_enabled and control and control.get("fin_llamada"):
             yield _sse({
                 "id": chat_id,
                 "object": "chat.completion.chunk",
