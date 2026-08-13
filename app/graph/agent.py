@@ -204,13 +204,22 @@ def _control_payload(turn_state: dict) -> dict:
     if escalar_crudo and criticidad == "verde":
         criticidad = "rojo"
     escalar = escalar_crudo or criticidad == "rojo"
+    fin_llamada = bool(turn_state.get("fin_llamada", False))
+    # Jamás colgar en el turno en que se escala. Visto en una llamada real: el
+    # agente avisó de fiebre con escalofríos, mandó a urgencias y en el mismo
+    # turno marcó fin_llamada, así que ElevenLabs cortó la llamada de inmediato.
+    # El paciente se queda con una noticia preocupante y sin poder preguntar
+    # nada. Es determinista y no depende de que el modelo respete el prompt.
+    if fin_llamada and escalar:
+        logger.info("fin_llamada ignorado: no se cuelga en un turno con escalamiento")
+        fin_llamada = False
     return {
         "criticidad": criticidad,
         "confianza": _infer_confianza(turn_state),
         "dimensiones_cubiertas": turn_state.get("dimensiones_cubiertas") or [],
         "red_flags": turn_state.get("red_flags") or [],
         "escalar": escalar,
-        "fin_llamada": bool(turn_state.get("fin_llamada", False)),
+        "fin_llamada": fin_llamada,
     }
 
 
