@@ -1,10 +1,23 @@
 # Entregable 03 — Informe final
 
-Proyecto: **Clara**, agente de voz para seguimiento postoperatorio.
+Proyecto: **VALAI**, agente de atención de VALAI.ORG para seguimiento postoperatorio.
 Autora: Natalia Patricia Remolina Rodríguez.
 Repositorio: https://github.com/NatoRemolina/postop-voice-agent
 
 ---
+
+## 0. Marca
+
+El agente opera bajo la identidad de **VALAI.ORG**. La interfaz aplica su manual
+de marca: paleta **muestreada directamente de los archivos originales del
+logotipo** (petróleo `#01383F`, turquesa `#10B89F`, lima `#9DFB65`, menta
+`#DBFBFA`) en vez de estimada a ojo, tipografía **Funnel Display** y logotipo
+recortado de su margen transparente para que sea legible a tamaño de interfaz.
+
+Una decisión deliberada: **el semáforo clínico verde/amarillo/rojo NO se
+rebrandeó**. Esos colores comunican gravedad al personal de salud y son
+convención clínica, no identidad visual; pasarlos a turquesa o lima habría
+hecho la interfaz más bonita y menos segura.
 
 ## 1. Declaración del modelo (compuerta G3)
 

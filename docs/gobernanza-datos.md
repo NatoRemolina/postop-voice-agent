@@ -21,7 +21,7 @@ procesa **datos sensibles** bajo la legislación colombiana:
 
 - **Consentimiento y transparencia**: el paciente debe saber, desde el primer
   segundo, que habla con un agente asistido por IA y para qué se usa la
-  información. El `first_message` del agente "Clara" ya se presenta como el
+  información. El `first_message` del agente "VALAI" ya se presenta como el
   programa de seguimiento de la clínica; en producción real se agregaría una
   línea explícita de consentimiento grabado antes de indagar síntomas.
 - **Finalidad**: los datos se usan única y exclusivamente para el seguimiento

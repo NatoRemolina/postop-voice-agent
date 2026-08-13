@@ -1,4 +1,4 @@
-# Clara — Agente de voz para seguimiento postoperatorio
+# VALAI — Agente de atención para seguimiento postoperatorio
 
 **Tech Sphere Challenge 2026.** Un agente de voz en español que llama al paciente
 recién operado, conversa en su lenguaje (regionalismos colombianos incluidos),

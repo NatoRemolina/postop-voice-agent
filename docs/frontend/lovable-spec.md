@@ -122,7 +122,7 @@ producción**, no copiados del código.
      onModeChange, onMessage})`
 - Callbacks:
   - `onModeChange({mode})`: `"speaking"` → "El agente habla"; si no → "El agente escucha"
-  - `onMessage({message, source})`: `source === "ai"` → burbuja de Clara;
+  - `onMessage({message, source})`: `source === "ai"` → burbuja de VALAI;
     `"user"` → burbuja del paciente (transcript en vivo)
 - Controles que debe tener la vista:
   - **Colgar** → `conversation.endSession()`

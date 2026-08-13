@@ -13,7 +13,7 @@ flowchart TB
     end
 
     subgraph voz["Capa de voz — ElevenLabs Agents"]
-        EL["Agente 'Clara'<br/>STT · detección de turnos · interrupciones · TTS<br/>voz Marcela (acento colombiano, eleven_flash_v2_5)<br/>pausas &lt;break/&gt; antes de preguntar"]
+        EL["Agente 'VALAI'<br/>STT · detección de turnos · interrupciones · TTS<br/>voz Marcela (acento colombiano, eleven_flash_v2_5)<br/>pausas &lt;break/&gt; antes de preguntar"]
     end
 
     subgraph backend["Backend — FastAPI en AWS EC2 (HTTPS)"]
