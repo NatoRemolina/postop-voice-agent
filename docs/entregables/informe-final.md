@@ -503,3 +503,12 @@ del agente sin cortar la sesión) y voz fija de Marcela, acento colombiano.
 
 `GET /api/metrics` recalcula sobre el log real en cada consulta, así que las
 cifras del README coinciden por construcción con lo que el jurado observe.
+
+
+Link de video en Youtube:
+
+
+
+
+
+
