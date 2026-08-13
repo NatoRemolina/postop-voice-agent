@@ -130,6 +130,18 @@ async def chat_completions(request: Request):
     t_start = time.perf_counter()
 
     raw_messages = body.get("messages", [])
+    # Qué herramientas nos ofrece ElevenLabs en esta petición. Es el dato que
+    # decide si podemos pedirle que cuelgue: la plataforma solo ejecuta un
+    # tool_call cuyo nombre venga en esta lista.
+    herramientas_ofrecidas = [
+        (t.get("function") or {}).get("name")
+        for t in (body.get("tools") or [])
+        if isinstance(t, dict)
+    ]
+    if herramientas_ofrecidas:
+        logger.info("ElevenLabs ofrece herramientas: %s", herramientas_ofrecidas)
+    else:
+        logger.info("ElevenLabs NO envió herramientas en esta petición")
     extra = body.get("elevenlabs_extra_body") or {}
     conversation_id = (
         extra.get("conversation_id")

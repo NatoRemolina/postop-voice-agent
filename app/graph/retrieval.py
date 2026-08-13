@@ -220,6 +220,11 @@ def _rescatar_mejor_lexico(
         return (meta.get("source"), meta.get("page"), doc.page_content[:80])
 
     mejor = bm25_docs[0]
+    # Marca para que el umbral de relevancia semántica no lo descarte: que BM25
+    # lo eligiera como mejor coincidencia léxica es evidencia por derecho
+    # propio, y es la única señal que capta un nombre propio raro (el coseno de
+    # un fragmento largo que toca muchos temas se diluye por debajo del umbral).
+    mejor.metadata = {**(mejor.metadata or {}), "rescate_lexico": True}
     if clave(mejor) in {clave(d) for d in fusionados[:2]}:
         return fusionados
     resto = [d for d in fusionados if clave(d) != clave(mejor)]
@@ -290,6 +295,7 @@ def _to_result(doc: Document, rank: int, total: int) -> dict:
         # Un fragmento suele cruzar el salto de página; se cita el rango para
         # que quien verifique la fuente encuentre la frase donde de verdad está.
         "page_end": meta.get("page_end", meta.get("page", 0)),
+        "rescate_lexico": bool(meta.get("rescate_lexico")),
         "score": round(score, 4),
     }
 
@@ -348,7 +354,14 @@ def sustentan_la_respuesta(results: list[dict]) -> list[dict]:
     con_relevancia = [r for r in results if "relevancia" in r]
     if not con_relevancia:
         return results
-    return [r for r in con_relevancia if r["relevancia"] >= _UMBRAL_RELEVANCIA]
+    # Dos señales, no una: supera el umbral semántico O es la mejor coincidencia
+    # léxica. Un fragmento largo que toca muchos temas diluye su coseno por
+    # debajo del umbral aunque contenga literalmente lo que se pregunta — le
+    # pasaba a un protocolo recién subido cuyo nombre propio estaba en el texto.
+    return [
+        r for r in con_relevancia
+        if r["relevancia"] >= _UMBRAL_RELEVANCIA or r.get("rescate_lexico")
+    ]
 
 
 def search_diagnostics(
