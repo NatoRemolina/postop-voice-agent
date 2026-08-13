@@ -61,7 +61,7 @@ function addBubble(source, text) {
   row.className = "bubble-row " + (source === "ai" ? "agent" : "patient");
   const label = document.createElement("div");
   label.className = "bubble-label";
-  label.textContent = source === "ai" ? "Clara (agente)" : "Paciente";
+  label.textContent = source === "ai" ? "VALAI (agente)" : "Paciente";
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.textContent = text;

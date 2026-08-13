@@ -370,3 +370,97 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Identidad VALAI.ORG
+   Paleta extraída del manual de marca (muestreo directo de los archivos
+   originales del logotipo, no estimada a ojo):
+     #01383F petróleo profundo · #10B89F turquesa · #9DFB65 lima · #DBFBFA menta
+   Tipografía: Funnel Display (incluida en /static/marca/).
+   Va al final del archivo para sobrescribir los estilos base sin tocarlos.
+   El semáforo clínico (verde/amarillo/rojo) NO se rebrandea: esos colores
+   comunican criticidad al personal de salud, no identidad de marca.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Funnel Display";
+  src: url("/static/marca/FunnelDisplay-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Funnel Display";
+  src: url("/static/marca/FunnelDisplay-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Funnel Display";
+  src: url("/static/marca/FunnelDisplay-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --valai-petroleo: #01383F;
+  --valai-turquesa: #10B89F;
+  --valai-lima: #9DFB65;
+  --valai-menta: #DBFBFA;
+  --valai-borde: #cfe6e4;
+}
+
+body {
+  font-family: "Funnel Display", system-ui, -apple-system, sans-serif;
+  color: var(--valai-petroleo);
+  background: #f4fbfa;
+}
+
+h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
+
+.topnav {
+  background: var(--valai-petroleo);
+  border-bottom: 3px solid var(--valai-turquesa);
+  gap: 1.5rem;
+}
+.topnav .brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-right: auto;
+  text-decoration: none;
+}
+.brand-logo { height: 26px; width: auto; display: block; }
+.brand-sub {
+  color: var(--valai-menta);
+  font-size: 0.82rem;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+.topnav a { color: var(--valai-menta); }
+.topnav a:hover { color: var(--valai-lima); text-decoration: none; }
+
+.card {
+  border: 1px solid var(--valai-borde);
+  border-radius: 12px;
+}
+
+th { color: var(--valai-petroleo); background: var(--valai-menta); }
+
+/* Botón principal (iniciar llamada, subir documento) */
+.call-btn, #upload-btn {
+  background: var(--valai-turquesa);
+  color: var(--valai-petroleo);
+  font-family: inherit;
+  font-weight: 700;
+}
+.call-btn.in-call { background: #c0392b; color: #fff; }
+.mute-btn { font-family: inherit; border-color: var(--valai-borde); }
+.mute-btn[aria-pressed="true"] { background: var(--valai-petroleo); border-color: var(--valai-petroleo); }
+
+/* Burbujas de la transcripción */
+.agent .bubble { background: var(--valai-menta); }
+.patient .bubble { background: #eaf6ee; }
+.bubble-label { color: #5b7d7a; }
+
+.call-status[data-state="listening"] { color: var(--valai-turquesa); }
+.call-status[data-state="speaking"] { color: var(--valai-petroleo); }
