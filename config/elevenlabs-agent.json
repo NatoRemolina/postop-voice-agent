@@ -1,5 +1,7 @@
 {
-  "nota": "Configuracion del agente de voz en ElevenLabs, exportada para que la capa de voz sea reproducible y auditable (la rubrica evalua turnos, silencios e interrupciones). No incluye claves ni el agent_id: van en .env.",
+  "nota": "Configuracion del agente de voz VALAI en ElevenLabs, exportada para que la capa de voz sea reproducible y auditable. No incluye claves ni el agent_id: van en .env.",
+  "nombre_agente": "VALAI — Agente de atención postoperatoria",
+  "first_message": "Buenas, le habla VALAI, el agente de atención del programa de seguimiento postoperatorio de su clínica. ¿Sí me escucha bien? Quisiera saber cómo ha seguido después de su cirugía.",
   "tts": {
     "model_id": "eleven_flash_v2_5",
     "voice_id": "86V9x9hrQds83qf7zaGn",
@@ -20,6 +22,7 @@
     "turn_model": "turn_v3",
     "interruption_ignore_terms": [],
     "interruption_ignore_term_languages": [],
+    "merge_with_default_ignore_terms": false,
     "transcribe_on_disabled_interruptions": false,
     "soft_timeout_config": {
       "timeout_seconds": 7.0,
@@ -42,5 +45,8 @@
   },
   "idioma": "es",
   "llm": "custom-llm",
-  "custom_llm_url": "https://52-207-194-196.sslip.io/v1"
+  "custom_llm_url": "https://52-207-194-196.sslip.io/v1",
+  "herramientas_nativas": [
+    "end_call"
+  ]
 }
