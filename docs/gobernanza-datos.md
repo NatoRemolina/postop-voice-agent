@@ -19,11 +19,16 @@ procesa **datos sensibles** bajo la legislación colombiana:
 
 ### Cómo se traduce a una llamada de voz con IA
 
-- **Consentimiento y transparencia**: el paciente debe saber, desde el primer
-  segundo, que habla con un agente asistido por IA y para qué se usa la
-  información. El `first_message` del agente "VALAI" ya se presenta como el
-  programa de seguimiento de la clínica; en producción real se agregaría una
-  línea explícita de consentimiento grabado antes de indagar síntomas.
+- **Consentimiento y transparencia**: el paciente lo sabe **desde el primer
+  segundo**. El `first_message` del agente declara que es un asistente con
+  inteligencia artificial, informa la finalidad («queda en su historia clínica,
+  solo para su seguimiento»), quién accede («únicamente su equipo tratante»),
+  el derecho de supresión («puede pedirme que lo borremos cuando quiera») y
+  **pide autorización antes de indagar síntomas** («¿le parece bien si le hago
+  unas preguntas?»). Si el paciente pregunta por sus datos a mitad de llamada,
+  el prompt (`app/graph/agent_prompt.py`, sección SUS DATOS) obliga a responder
+  con esos mismos hechos y prohíbe prometer nada fuera de esta lista o inventar
+  plazos de conservación. Verificado en producción.
 - **Finalidad**: los datos se usan única y exclusivamente para el seguimiento
   postoperatorio de ese paciente — no para publicidad, no para venderlos a
   terceros, no para entrenar modelos con datos reales sin autorización nueva.
