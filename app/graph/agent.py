@@ -248,6 +248,8 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
     if not last_user.strip():
         return "(sin consulta clínica en este turno)", []
     try:
+        import concurrent.futures as _cf
+
         from app.graph.retrieval import search, sustentan_la_respuesta
 
         # Solo los pasajes con relevancia semántica real: la fusión por ranking
@@ -255,7 +257,17 @@ def _prefetch_context(history: list[dict], scenario: str | None) -> tuple[str, l
         # Citar esos como fuente rompe el requisito de que la referencia
         # "resista una verificación contra la fuente real" (auditado: 3 de 4
         # páginas citadas no contenían nada relacionado con la respuesta).
-        chunks = sustentan_la_respuesta(search(last_user, scenario, top_k=3, fast=True))
+        #
+        # Tope duro de tiempo: ElevenLabs corta el turno a los 7 s. Antes que
+        # perder la llamada entera, se prefiere responder sin contexto — el
+        # prompt ya obliga a no inventar cifras cuando no hay contexto.
+        with _cf.ThreadPoolExecutor(max_workers=1) as pool:
+            futuro = pool.submit(search, last_user, scenario, 3, True)
+            try:
+                chunks = sustentan_la_respuesta(futuro.result(timeout=3.0))
+            except _cf.TimeoutError:
+                logger.warning("prefetch superó 3 s; se responde sin contexto clínico")
+                return "(no disponible a tiempo en este turno)", []
     except Exception:
         logger.warning("prefetch de contexto clínico falló", exc_info=True)
         return "(no disponible en este turno)", []

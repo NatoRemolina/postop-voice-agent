@@ -48,7 +48,16 @@ def make_tools(scenario: str | None, turn_state: dict) -> list:
             # Mismo criterio que el prefetch: solo se devuelve (y se cita) lo
             # que de verdad sustenta la respuesta. La fusión por ranking
             # siempre entrega k pasajes aunque ninguno venga al caso.
-            chunks = sustentan_la_respuesta(search(consulta, scenario, top_k=4))
+            # fast=True también aquí: esta herramienta corre DENTRO de un turno
+            # de voz, con el paciente esperando en silencio. En modo completo
+            # invoca dos ayudantes LLM (reescritura y calificación) contra
+            # Groq 8B, cuyo cupo por minuto es de 6.000 tokens; con la cuota al
+            # tope cada intento devolvía 429 tras varios segundos y el turno se
+            # iba a 8-9 s. ElevenLabs corta a los 7 s: llamadas caídas a mitad
+            # de conversación, medido en producción.
+            chunks = sustentan_la_respuesta(
+                search(consulta, scenario, top_k=4, fast=True)
+            )
         except Exception as exc:
             logger.warning("Fallo en búsqueda de conocimiento clínico: %s", exc)
             return "No se encontró información relevante en el corpus para esta consulta."
