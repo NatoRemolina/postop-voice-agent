@@ -53,6 +53,9 @@ async def get_turns(limit: int = Query(50, ge=1, le=500)):
                 "rag_sources": r.get("rag_sources"),
                 "control": r.get("control"),
                 "orquestacion": r.get("orquestacion"),
+                # Cuántas llamadas anteriores del mismo paciente se inyectaron
+                # en el contexto de este turno (memoria entre llamadas).
+                "memoria_llamadas_previas": r.get("memoria_llamadas_previas", 0),
             }
             for r in recientes
         ],
