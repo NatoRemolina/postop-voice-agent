@@ -183,12 +183,47 @@ def _hybrid_search_one(query: str, where: dict | None) -> tuple[list[Document], 
                 retrievers=[dense_retriever, bm25_retriever], weights=[0.6, 0.4]
             )
             combined = ensemble.weighted_reciprocal_rank([dense_docs, bm25_docs])
+            combined = _rescatar_mejor_lexico(combined, bm25_docs)
             return combined, branch_meta
         except Exception:
             logger.warning("rank fusion failed, falling back to dense only", exc_info=True)
             return dense_docs, branch_meta
 
     return dense_docs or bm25_docs, branch_meta
+
+
+def _rescatar_mejor_lexico(
+    fusionados: list[Document], bm25_docs: list[Document]
+) -> list[Document]:
+    """Garantiza que el mejor resultado léxico llegue a los candidatos finales.
+
+    La fusión por rango recíproco con pesos 0,6 denso / 0,4 léxico deja a un
+    documento que SOLO encontró BM25 por debajo de todos los densos: con k=60,
+    el primero de BM25 puntúa 0,4/61 y el octavo denso 0,6/68 — el léxico
+    pierde siempre. Medido con un protocolo institucional recién subido cuyo
+    nombre propio ("escala VERBENA") aparecía en un único fragmento de 3.250:
+    BM25 lo daba como resultado nº 1 y la fusión no lo mostraba ni pidiendo 8
+    candidatos, así que el agente respondía "no conozco esa escala" teniendo el
+    documento indexado.
+
+    Es exactamente el caso del conocimiento vivo: alguien sube una guía con un
+    término propio y pregunta por él. Se promueve el mejor resultado léxico a
+    la segunda posición — no a la primera, para no degradar las consultas
+    normales, donde la rama densa acierta mejor con el lenguaje coloquial del
+    paciente. El umbral de relevancia posterior sigue decidiendo si se cita.
+    """
+    if not bm25_docs or not fusionados:
+        return fusionados
+
+    def clave(doc: Document) -> tuple:
+        meta = doc.metadata or {}
+        return (meta.get("source"), meta.get("page"), doc.page_content[:80])
+
+    mejor = bm25_docs[0]
+    if clave(mejor) in {clave(d) for d in fusionados[:2]}:
+        return fusionados
+    resto = [d for d in fusionados if clave(d) != clave(mejor)]
+    return [resto[0], mejor, *resto[1:]] if resto else [mejor]
 
 
 def _dedup_docs(docs: list[Document]) -> list[Document]:
