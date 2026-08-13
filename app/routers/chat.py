@@ -295,6 +295,7 @@ async def chat_completions(request: Request):
                 "criticidad_llm": telemetry.get("criticidad_llm"),
                 "criticidad_ml": telemetry.get("criticidad_ml"),
                 "escalar_efectivo": telemetry.get("escalar_efectivo"),
+                "memoria_llamadas_previas": telemetry.get("memoria_llamadas_previas", 0),
             }
         else:
             rag_sources = [
