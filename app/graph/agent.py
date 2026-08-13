@@ -129,6 +129,16 @@ def _build_groq_fallback_model():
 
 
 def _history_to_messages(history: list[dict]) -> list:
+    """Convierte el historial de la llamada a mensajes de LangChain.
+
+    El historial DEBE terminar en un mensaje del paciente: Gemini rechaza la
+    petición completa si el último turno es del asistente ("does not support
+    model prefilling. The final request turn must be a user message"), y ese
+    rechazo tumbaba al proveedor primario en plena llamada — verificado en
+    producción. ElevenLabs puede enviarlo así cuando el agente habló último
+    (relleno de silencio, interrupción, reintento), así que se recortan los
+    mensajes finales del asistente en vez de confiar en que no ocurra.
+    """
     messages: list = []
     for m in history:
         content = (m.get("content") or "").strip()
@@ -138,6 +148,8 @@ def _history_to_messages(history: list[dict]) -> list:
             messages.append(HumanMessage(content=content))
         else:
             messages.append(AIMessage(content=content))
+    while messages and isinstance(messages[-1], AIMessage):
+        messages.pop()
     return messages
 
 
