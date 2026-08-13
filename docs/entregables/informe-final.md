@@ -310,8 +310,9 @@ de voz es eliminatoria y una demo en vivo no admite un despliegue de urgencia.
 
 El desarrollo se hizo con **asistencia intensiva de IA bajo dirección humana**.
 Las herramientas usadas para construir fueron **Claude** (Anthropic) como
-asistente principal de programación y **ChatGPT** (OpenAI) como apoyo en
-exploración y redacción, además de **Lovable** para el frontend de la consola.
+asistente principal de programación, diseño de la arquitectura y auditoría del
+propio trabajo; **ChatGPT** (OpenAI) como apoyo en exploración y redacción; y
+**Lovable** para el frontend de la consola clínica.
 
 > **Frontera importante para la compuerta G3.** Esas herramientas son
 > *asistentes de desarrollo*: escribieron y revisaron código conmigo, igual que
