@@ -505,7 +505,7 @@ del agente sin cortar la sesión) y voz fija de Marcela, acento colombiano.
 cifras del README coinciden por construcción con lo que el jurado observe.
 
 
-Link de video en Youtube:
+Link de video en Youtube: https://youtu.be/eOKPSh04cQI
 
 
 
