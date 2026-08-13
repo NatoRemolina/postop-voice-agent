@@ -1,4 +1,4 @@
-# Entregable 03 — Informe final
+## Informe final
 
 ![VALAI.ORG](img/logotipo-valai.png)
 
