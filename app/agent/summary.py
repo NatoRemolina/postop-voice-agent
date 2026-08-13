@@ -343,6 +343,68 @@ def persist_summary(summary: dict) -> None:
         )
 
 
+def _normaliza_nombre(nombre: str) -> str:
+    """Clave de comparación tolerante: el nombre llega por transcripción de voz,
+    así que varía en tildes, mayúsculas y en si trae apellido."""
+    import unicodedata
+
+    limpio = unicodedata.normalize("NFKD", nombre or "").encode("ascii", "ignore").decode()
+    return " ".join(limpio.lower().split())
+
+
+def historial_del_paciente(
+    nombre: str, excluir_conversacion: str | None = None, limite: int = 3
+) -> list[dict]:
+    """Resúmenes de llamadas ANTERIORES del mismo paciente, de la más reciente
+    a la más antigua.
+
+    Hace posible la continuidad entre llamadas: sin esto cada llamada empieza en
+    blanco y el agente vuelve a preguntar lo que ya sabe. El emparejamiento es
+    por nombre normalizado (es lo único que tenemos: el nombre lo dice el
+    paciente en voz alta), así que se exige coincidencia exacta tras normalizar
+    para no mezclar historias clínicas de dos personas distintas — un falso
+    positivo aquí sería grave.
+    """
+    clave = _normaliza_nombre(nombre)
+    if not clave or clave == "no identificado":
+        return []
+    previas = [
+        s
+        for s in latest_summaries()
+        if _normaliza_nombre(s.get("paciente") or "") == clave
+        and s.get("conversation_id") != excluir_conversacion
+    ]
+    return previas[:limite]
+
+
+def formato_historial(previas: list[dict]) -> str:
+    """Rinde el historial en texto compacto para el prompt del sistema."""
+    if not previas:
+        return ""
+    lineas = []
+    for s in previas:
+        fecha = ""
+        ts = s.get("ended_ts") or s.get("ts")
+        if ts:
+            from datetime import datetime
+
+            try:
+                fecha = datetime.fromtimestamp(ts).strftime("%d/%m")
+            except Exception:
+                fecha = ""
+        partes = [f"— Llamada previa{f' del {fecha}' if fecha else ''}"]
+        if s.get("criticidad_final"):
+            partes.append(f"criticidad {s['criticidad_final']}")
+        sintomas = s.get("sintomas_reportados") or []
+        if sintomas:
+            partes.append("reportó: " + "; ".join(str(x) for x in sintomas[:4]))
+        flags = s.get("red_flags") or []
+        if flags:
+            partes.append("señales: " + ", ".join(str(x).replace("_", " ") for x in flags[:4]))
+        lineas.append(". ".join(partes) + ".")
+    return "\n".join(lineas)
+
+
 def latest_summaries() -> list[dict]:
     by_id: dict[str, dict] = {}
     for summary in read_jsonl("call_summaries.jsonl"):

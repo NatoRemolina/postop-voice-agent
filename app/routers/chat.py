@@ -11,7 +11,12 @@ from fastapi.responses import StreamingResponse
 from app.agent.llm import TurnUsage, stream_response
 from app.agent.prompts import DEFAULT_PATIENT_CONTEXT, SYSTEM_PROMPT, format_rag_context
 from app.agent.scenario import detect_scenario
-from app.agent.summary import build_call_summary, persist_summary
+from app.agent.summary import (
+    build_call_summary,
+    formato_historial,
+    historial_del_paciente,
+    persist_summary,
+)
 from app.config import settings
 from app.rag.retrieve import retrieve
 from app.storage import append_jsonl
@@ -76,6 +81,38 @@ async def _auto_summarize(conversation_id: str) -> None:
         logger.exception("auto-resumen falló para %s", conversation_id)
 
 
+# El paciente dice su nombre en voz alta ("soy Rosa", "me llamo Juan Pérez",
+# "habla con Ana"). Se extrae con patrones deliberadamente conservadores: es
+# preferible no recordar a cruzar el historial de dos personas distintas.
+_PATRONES_NOMBRE = [
+    # El disparador va sin distinguir mayúsculas ("Mi nombre es" al empezar una
+    # frase), pero el nombre en sí SÍ debe ir capitalizado: es lo que lo separa
+    # de un sustantivo común ("soy el paciente").
+    re.compile(r"\b(?i:soy|me llamo|mi nombre es|con|habla)\s+"
+               r"((?:[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?)"),
+]
+_NO_SON_NOMBRES = {
+    "el", "la", "usted", "yo", "ella", "doctora", "doctor", "enfermera",
+    "paciente", "buenos", "buenas", "hola", "gracias", "señora", "señor",
+}
+
+
+def _nombre_mencionado(history: list[dict]) -> str | None:
+    """Primer nombre propio que el paciente haya dicho en la conversación."""
+    for m in history:
+        if m.get("role") != "user":
+            continue
+        for patron in _PATRONES_NOMBRE:
+            hallazgo = patron.search(m.get("content") or "")
+            if not hallazgo:
+                continue
+            candidato = hallazgo.group(1).strip()
+            if candidato.split()[0].lower() in _NO_SON_NOMBRES:
+                continue
+            return candidato
+    return None
+
+
 def _build_rag_query(history: list[dict]) -> str:
     """Last patient utterance, prefixed with the agent's question when it's a short reply."""
     last_user = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
@@ -110,6 +147,27 @@ async def chat_completions(request: Request):
         history = [{"role": "user", "content": "Hola"}]
 
     scenario = extra.get("scenario") or detect_scenario([m["content"] for m in history])
+    telemetry: dict = {}
+
+    # Memoria entre llamadas: si el paciente ya dijo su nombre, se recuperan los
+    # resúmenes de sus llamadas anteriores y se añaden al contexto. Sin esto cada
+    # llamada arranca en blanco y el agente vuelve a preguntar lo que ya sabe.
+    # Va aquí y no en el prefetch porque el nombre puede aparecer en cualquier
+    # turno: se reevalúa en cada uno y en cuanto se conoce, la memoria entra.
+    nombre = _nombre_mencionado(history)
+    if nombre:
+        try:
+            previas = historial_del_paciente(nombre, excluir_conversacion=conversation_id)
+            if previas:
+                patient_context = (
+                    f"{patient_context}\n"
+                    f"HISTORIAL DE {nombre.upper()} (llamadas anteriores; úsalo para dar "
+                    f"continuidad y contrastar la evolución, sin repetir lo que ya sabes):\n"
+                    f"{formato_historial(previas)}"
+                )
+                telemetry["memoria_llamadas_previas"] = len(previas)
+        except Exception:
+            logger.warning("no se pudo recuperar el historial del paciente", exc_info=True)
 
     rag_query = None
     chunks = []
@@ -125,7 +183,6 @@ async def chat_completions(request: Request):
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:16]}"
     created = int(time.time())
     usage = TurnUsage()
-    telemetry: dict = {}
 
     async def event_stream():
         t_first_token = None
