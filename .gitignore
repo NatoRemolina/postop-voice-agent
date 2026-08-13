@@ -30,3 +30,6 @@ mlflow_data/
 *.log
 logs/
 mlruns/
+
+# Guion del video: material de trabajo, no entregable
+docs/entregables/guion-video.md
