@@ -14,8 +14,8 @@ repositorio entregado; las dos preguntas se responden frente a cámara.
 | | |
 |---|---|
 | Llamada de calentamiento | La primera tras un reinicio tarda ~6 s (carga el modelo de embeddings); de la segunda en adelante, ~2 s |
-| Limpiar la Biblioteca | Borrar el `MERIDIANO-7` de pruebas para que la subida en vivo destaque |
-| Tener a mano | `Protocolo_ORQUIDEA-4_Hospital_ValleDelSauce.pdf` en el escritorio |
+| Estado de partida | `ORQUIDEA-4` **subido** en la Biblioteca · `MERIDIANO-7` **fuera** (borrado) |
+| Tener a mano | `Protocolo_MERIDIANO-7_Clinica_SanQuintin.pdf` en el escritorio, listo para arrastrar |
 | Pestañas abiertas | Consola `valai-agente-atencion.lovable.app` · Repo en GitHub · `/api/metrics` |
 | Respaldo | Si la consola de Lovable falla, `52-207-194-196.sslip.io/admin` hace lo mismo |
 | Silenciar notificaciones | Del sistema y del navegador |
@@ -36,32 +36,54 @@ repositorio entregado; las dos preguntas se responden frente a cámara.
 
 ## 2. Demo con grabación de pantalla (5 min)
 
-### a) El conocimiento vivo — compuerta G5 (90 s) · **empieza por aquí**
+### a) El conocimiento vivo — compuerta G5 (2:30) · **empieza por aquí**
 
-Es el momento más fuerte. Se graba en tres actos:
+Es el momento más fuerte del video. Con **dos** protocolos se demuestra algo que
+el ciclo simple no alcanza: que el olvido es **quirúrgico**, no un vaciado.
 
-**Acto 1 — preguntar ANTES de subir nada.** Inicia la llamada y di:
+**Acto 1 — el agente no sabe** *(30 s)*
 
-> *«Me operaron de la rodilla. ¿A cuántas horas del egreso se hace el primer
-> contacto según el protocolo ORQUÍDEA-4?»*
+Inicia la llamada y pregunta:
 
-El agente responde que **no lo tiene registrado**. Comenta al aire:
+> *«¿A cuántas horas del egreso se hace el primer contacto según el protocolo
+> MERIDIANO-7?»*
 
-> «Fíjense: no improvisa. Dice que no lo sabe, que es exactamente lo que uno
-> necesita de un sistema clínico.»
+Responde que **no lo tiene en sus guías**.
 
-**Acto 2 — subirlo en vivo.** Biblioteca → seleccionar el PDF → Subir. Aparece
-"procesado y disponible".
+> «Fíjense que no improvisa: dice que no lo sabe. En un sistema clínico eso no
+> es una limitación, es el requisito de entrada.»
 
-**Acto 3 — volver a preguntar lo mismo.** Ahora responde **«diecinueve horas»**.
-Y si quieres una segunda: *«¿De cuánto a cuánto va el índice ZAFIRO?»* →
-**«de cero a seis»**.
+**Acto 2 — aprende en vivo** *(45 s)*
 
-> «Diecinueve horas no es un intervalo que use ningún protocolo real, y ningún
-> índice de movilidad va de cero a seis. Esos números solo pueden venir del PDF
-> que acabo de subir hace treinta segundos.»
+Biblioteca → arrastrar `MERIDIANO-7` → Subir. Aparece "procesado y disponible".
+Vuelve a preguntar lo mismo.
 
-Cierra borrando el documento y preguntando por tercera vez: vuelve a no saberlo.
+> Responde: **«veintiséis horas»**
+
+> «Veintiséis horas no es un intervalo que use ningún protocolo real. Ese número
+> solo puede venir del PDF que subí hace treinta segundos.»
+
+**Acto 3 — y el otro sigue ahí** *(30 s)*
+
+Pregunta ahora por el segundo protocolo, que llevaba rato subido:
+
+> *«¿Y según el protocolo ORQUÍDEA-4?»* → **«diecinueve horas»**
+
+> «Dos protocolos, de dos hospitales distintos, y cada uno responde con su
+> propia cifra. No los confunde.»
+
+**Acto 4 — el borrado quirúrgico** *(45 s)* · **el golpe**
+
+Elimina **solo** el MERIDIANO desde la Biblioteca. Pregunta por los dos seguidos:
+
+> MERIDIANO-7 → *«no lo tengo en mis guías»*
+> ORQUÍDEA-4 → *«diecinueve horas»*
+
+> «Olvidó exactamente lo que borré y conservó lo demás. No es vaciar una caché:
+> es supresión selectiva. Y eso es justo lo que hace falta para poder decirle a
+> un paciente, con verdad, que su información se eliminó.»
+
+*(Verificado en producción antes de grabar.)*
 
 ### b) Una llamada clínica completa (2 min)
 
@@ -141,8 +163,9 @@ por diseño hacia el falso positivo: en salud, el error barato es alertar de má
   necesitan.
 - *Frente a chatbots o IVR genéricos*: fundamentación documental **verificable**
   —cada respuesta rastreable a un PDF y un rango de páginas—, conocimiento que
-  el hospital actualiza él mismo en caliente desde una consola, y trazabilidad
-  de la decisión clínica, no solo de la conversación.
+  el hospital actualiza él mismo en caliente desde una consola, con **borrado
+  selectivo** (se elimina una guía y solo esa se olvida), y trazabilidad de la
+  decisión clínica, no solo de la conversación.
 - *La honestidad como característica*: el agente dice «eso no lo tengo en mis
   guías» en vez de inventar. En salud eso no es una limitación: es el requisito
   de entrada.
