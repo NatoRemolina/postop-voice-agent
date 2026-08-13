@@ -1,5 +1,7 @@
 # Entregable 03 — Informe final
 
+![VALAI.ORG](img/logotipo-valai.png)
+
 Proyecto: **VALAI**, agente de atención de VALAI.ORG para seguimiento postoperatorio.
 Autora: Natalia Patricia Remolina Rodríguez.
 Repositorio: https://github.com/NatoRemolina/postop-voice-agent
